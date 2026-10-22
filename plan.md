@@ -256,6 +256,12 @@ Every increment follows the same discipline:
 | **Tests written first** | Hot windows equal oracle after replaying a stream; expired buckets evicted; applying one observation twice changes nothing; wiping Redis and rebuilding from cold tier → identical state; read/write latency percentiles and memory-per-cell in budget |
 | **Done when** | Hot read and write latency reported as average, p50, p95, p99 |
 
+> **As built (Increment 9):** the hot tier stores compressed *observations* per (cell, variable,
+> source) and computes windows at read time; a per-bucket aggregate ring cannot make
+> "applying one observation twice changes nothing" true. Measured ~3.9 KB/cell (budget 8 KB),
+> read p95 ~1.3 ms, write p95 ~2 ms. Redis uses `noeviction` so state is never silently dropped.
+> See `INCREMENTS_EXPLANATION.md` section 8d.
+
 ### Increment 10 — State Vector Assembler and Static Layers
 
 | | |
@@ -266,6 +272,15 @@ Every increment follows the same discipline:
 
 > **Static layer candidates:** SRTM or Copernicus DEM (elevation/slope), WorldPop
 > or GHSL (population density). Final selection is a decision inside increment 10.
+
+> **As built (Increment 10):** new package `src/disaster_intel/state/`.
+> `FeatureSpec.v1` = 25 dynamic features (5 variables x 5 windows) + 3 static + 1 derived
+> (`compound_saturation = soil_moisture_rootzone__24h x precipitation__72h`) = 29, fingerprinted
+> so a vector saved under another spec fails to load (`SpecMismatchError`). Missing = NaN, never 0.
+> Static layers: elevation = Copernicus DEM GLO-90 via Open-Meteo `/v1/elevation`; slope = plane
+> fit through the cell centre + 6 neighbour centres; population = WorldPop 1 km count raster
+> (GeoTIFF/ASCII) aggregated to cells. `StateAssembler.get_state(cell, as_of, tier)` serves "now"
+> from Redis and any past time from ClickHouse; `compare_tiers` checks they agree.
 
 ---
 

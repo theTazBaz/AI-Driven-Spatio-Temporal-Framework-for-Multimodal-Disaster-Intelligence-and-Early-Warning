@@ -256,11 +256,88 @@ Connects all components developed in Increments 2–5 into an end-to-end telemet
 
 ---
 
+## 8b. Increment 7: ClickHouse Cold Store (`storage/`)
+
+### Purpose
+First half of Objective 2: the permanent, compressed, deduplicated record of every `Observation`, from which any past state can later be reproduced (Increments 8-10).
+
+### Key Components ([`src/disaster_intel/storage/`](src/disaster_intel/storage/))
+* **`migrations.py`**: versioned, idempotent DDL. Every statement is `IF NOT EXISTS` and applied versions are recorded in `schema_migrations`, so `migrate()` a second time returns `[]`.
+* **`observations` table**: `ReplacingMergeTree`, `PARTITION BY toYYYYMM(ts)`, `ORDER BY (cell, variable, source, ts)`.
+  * `cell UInt64` (H3 index as integer), `variable`/`source` `LowCardinality(String)`, `ts DateTime64(6,'UTC')`, `value Float32`, with Delta / DoubleDelta / Gorilla + ZSTD codecs.
+  * **No `unit` column** (a function of `variable` via `VariableCatalog`) and **no `idempotency_key` column** (a hash of the other columns; recomputed on read). Both save bytes.
+* **`ColdStore`** ([`cold.py`](src/disaster_intel/storage/cold.py)): `migrate()`, `write()`, `read_cell()`, `read_all()`, `count()`, `parent_cells()`, `count_by_parent()`, `storage_stats()`, `cold_correctness()`.
+* **Reads always deduplicate (`FINAL`)**: `ReplacingMergeTree` only removes duplicates when parts merge. `raw_count()` is the one deliberate non-deduplicated query; a test pins the pre-merge behaviour with `SYSTEM STOP MERGES`.
+* **Float32**: values read back equal `to_float32(original)`; the cold-correctness metric compares after that quantisation.
+
+### Bugs found and fixed on the way (regression tests added)
+* Catalog said `wind_speed` is `m/s` while the Open-Meteo adapter emits `km/h` -> catalog now `km/h`.
+* `convert_unit` lower-cased pass-through units, so pressure observations carried `hpa` instead of `hPa` -> canonical spelling is kept.
+
+### Tests
+* `tests/test_cold_store_unit.py` (unit, fake client): row mapping, validation-before-insert, batching, idempotent migrations, schema/codecs, every read uses `FINAL`.
+* `tests/test_cold_store_integration.py` (real ClickHouse): cold-correctness = 100%, duplicates collapse, ClickHouse `h3ToParent` equals Python `h3` on 1,000 random cells (res 4/5/6), migrations idempotent.
+* `tests/test_cold_store_perf.py`: one synthetic day for all 5,930 cells x 6 hourly variables; budget measured from `system.parts` (first measurement 3.31 B/row compressed).
+
+---
+
+## 8c. Increment 8: Hourly Buckets & Rolling Windows (`windows.py`, `storage/`)
+
+### Purpose
+Second step of Objective 2: turn the raw cold-store observations into rolling-window features (1h, 6h, 24h, 72h, 7d) that are correct, reproducible for any past time, and cheap to read.
+
+### Key Components
+* **[`windows.py`](src/disaster_intel/windows.py)** (pure Python, no database): `bucket_end`, `floor_hour`, `Bucket`, `bucketize`, `combine_buckets`, `windows_from_buckets`, and the slow oracle `reference_windows`. The Redis hot tier (Increment 9) reuses `Bucket` / `combine_buckets`.
+* **Migration 2**: `hourly_buckets` (`ReplacingMergeTree(version)`), one row per (cell, variable, source, hour-ending bucket) with `n_obs`, `sum_value`, `min_value`, `max_value`.
+* **`ColdStore`**: `write()` recomputes every bucket it touched from `observations FINAL`; `read_buckets()`, `windows(cell, as_of)`, `rebuild_buckets()`; `maintain_buckets=False` for bulk backfill.
+
+### Conventions (pinned by tests)
+* Bucket `B` holds observations with `B - 1h < ts <= B` (hour-ending). A window is the last N buckets ending at `as_of` floored to the hour, so a window computed today for time T equals the one computed live at T.
+* SUM for rainfall, AVG (sum / count) for soil moisture/temperature/pressure, MAX for wind/discharge/seismic/CAP.
+* `WindowValue(value, observed_hours, hours)`; `coverage = observed_hours / hours`; no data means `value=None`, never 0.
+
+### Deviation from plan.md (and why)
+plan.md suggests an incremental materialized view. A plain MV adds every *insert*, so an at-least-once duplicate or a revised value would be counted twice (ReplacingMergeTree only dedups on merge). Buckets are instead recomputed from the deduplicated observations for exactly the (cells, variables, hours) a write touched, which also handles late arrivals. The "cheap combine of <= 168 buckets at read time" design is unchanged.
+
+### Tests
+* `tests/test_windows_unit.py`: conventions, coverage, hypothesis differential test (buckets vs oracle), refresh SQL, FINAL on reads, migration 2.
+* `tests/test_windows_integration.py`: ClickHouse windows == oracle for every variable/window, late observation, duplicates/revisions, rollback equality, backfill mode.
+* `tests/test_buckets_perf.py`: bucket-table bytes/row and `windows()` read latency.
+
+---
+
+## 8d. Increment 9: Redis Hot Tier & Rebuild Job (`storage/hot.py`, `rebuild.py`, `tee.py`)
+
+### Purpose
+Third step of Objective 2: the *current* state of every cell, readable in about a millisecond, and provably rebuildable from the cold tier.
+
+### Key Components
+* **[`hot.py`](src/disaster_intel/storage/hot.py)** - `HotStore`: one Redis hash per H3 cell (`ws:v1:<cell>`), one field per (variable, source) holding a zlib-compressed, time-sorted, delta-coded block of float32 observations. `write()`, `windows()` (same signature/shape as `ColdStore.windows`), `evict_expired()`, `clear()`, `dump_cell()`, `memory_usage()`; plus `summarize_latencies()` (average, p50, p95, p99).
+* **[`rebuild.py`](src/disaster_intel/storage/rebuild.py)** - `rebuild_hot_from_cold()` and a CLI (`make rebuild-hot`).
+* **[`tee.py`](src/disaster_intel/storage/tee.py)** - `TeeSink`: writes the cold tier first (the record), then the hot tier.
+
+### Deviation from plan.md (and why)
+plan.md sketches a "bucket ring, ~6.7 KB/cell" (one float per hourly bucket). One float cannot answer SUM/AVG/MAX/MIN, and an aggregate cannot detect a duplicate or undo a revised value, so "applying one observation twice changes nothing" could not hold. The hot tier therefore stores the **observations** (compressed) and computes window aggregates at read time with the same conventions as the cold tier. Measured: **~3.9 KB/cell (~23 MB for 5,930 cells)**, hot read p95 ~1.3 ms, write p95 ~2 ms (budget: 8 KB, 5 ms).
+
+### Conventions (pinned by tests)
+* An observation is identified by (variable, source, ts); re-applying overwrites the same slot (idempotent); a revised value replaces the old one (like `ReplacingMergeTree`).
+* Kept while `bucket_end(ts) > floor_hour(now) - 168 h`. Eviction is lazy on write, plus `evict_expired` and a key TTL.
+* `windows()` raises `HotRangeError` rather than returning a truncated window; the past is the cold tier's job.
+* Redis runs with `maxmemory-policy noeviction` (a test enforces it): silent LRU eviction would make window reads wrong. docker-compose changed accordingly.
+* Single writer per cell (the bus already orders by cell key); readers are always safe.
+
+### Tests
+* `tests/test_hot_unit.py` (unit, `tests/fake_redis.py`): encoding, hypothesis differential test vs `reference_windows`, eviction, idempotency, rebuild, round-trip count, tee sink, latency report.
+* `tests/test_hot_integration.py` (real Redis; the rebuild test also needs ClickHouse): oracle agreement, physical eviction + TTL, byte-identical re-apply, wipe-and-rebuild equals live state and equals ClickHouse windows, eviction-policy guard.
+* `tests/test_hot_perf.py`: memory per cell and hot read/write latency percentiles.
+
+---
+
 ## 9. Current System Status & Test Suite Summary
 
 All quality gates pass with zero warnings or errors:
 
-* **Unit Test Suite**: **79 passed** in **1.86 seconds** (`pytest -m unit`).
+* **Unit Test Suite**: **189 passed** in **~6 seconds** (`pytest -m unit`).
 * **Linter**: `ruff check src tests` (0 errors, 100% clean).
 * **Formatter**: `ruff format --check src tests` (100% compliant across 22 source files).
 * **Type Checker**: `mypy src tests` (Strict typing verified across 22 source files).
@@ -271,18 +348,16 @@ All quality gates pass with zero warnings or errors:
 
 ## 10. Upcoming Increments Roadmap (Increments 7 to 14)
 
-### Increment 7: ClickHouse Cold Store (Objective 2)
-* Observations table with `ReplacingMergeTree` engine, Delta + ZSTD compression.
-* Deduplication on part merges and cold-correctness checks (write-then-read equals reference copy).
-* H3 parent-cell aggregations verified against Python H3 library.
+### Increment 7: ClickHouse Cold Store (Objective 2) - DONE (see section 8b)
 
-### Increment 8: Hourly Buckets & Rolling Windows
+### Increment 8: Hourly Buckets & Rolling Windows - DONE (see section 8c)
 * Incremental materialized views maintaining hourly aggregates (`SUM` for rain, `AVG` for soil moisture, `MAX` for wind/discharge).
 * Rolling windows: 1h, 6h, 24h, 72h, 7d.
 
-### Increment 9: Redis Hot Tier
-* 7-day circular buffer ring in Redis for sub-millisecond cell feature vector retrieval.
+### Increment 9: Redis Hot Tier & Rebuild Job - DONE (see section 8d)
 
-### Increments 10–14: Multimodal Fusion, Foundation Model & Warning Engine
+### Increment 10: State Vector Assembler & Static Layers - DONE (see plan.md 'As built (Increment 10)')
+
+### Increments 11–14: Multimodal Fusion, Foundation Model & Warning Engine
 * Cross-attention spatio-temporal fusion, NASA Prithvi geospatial backbone, and early warning lead-time benchmarking.
 

@@ -62,9 +62,13 @@ uv run pytest -m unit
 uv run ingest --replay tests/fixtures/open_meteo_sample.json
 ```
 
-### 3. Start Local Storage Infrastructure (Optional)
+### 3. Start Local Storage Infrastructure (needed for Increment 7+ integration tests)
 ```bash
-docker compose up -d
+docker compose up -d --wait
+uv run pytest -m integration      # ClickHouse cold store (Increment 7), service health
+uv run pytest -m perf -s          # storage budgets; prints bytes per row, hot memory + latency
+uv run python scripts/hot_demo.py # Increment 9: Redis hot tier demo (wipe + rebuild from ClickHouse)
+make rebuild-hot                  # repopulate Redis from ClickHouse
 ```
 
 ---

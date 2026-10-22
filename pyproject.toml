@@ -11,8 +11,10 @@ authors = [
     { name = "Swaroop Raghavendra Rao" },
 ]
 dependencies = [
+    "clickhouse-connect>=1.11.0",
     "h3>=4.5.0",
     "httpx>=0.28.1",
+    "redis>=5.0",
 ]
 
 [project.scripts]
@@ -20,6 +22,9 @@ ingest = "disaster_intel.pipeline:main"
 disaster-intel = "disaster_intel.pipeline:main"
 
 [project.optional-dependencies]
+geo = [
+    "rasterio>=1.3",
+]
 dev = [
     "pytest>=8.0",
     "pytest-socket>=0.7",
@@ -72,4 +77,8 @@ mypy_path = "src"
 
 [[tool.mypy.overrides]]
 module = ["h3.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["rasterio.*"]
 ignore_missing_imports = true

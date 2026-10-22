@@ -11,6 +11,7 @@ Core types:
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import math
@@ -229,7 +230,7 @@ class VariableCatalog:
                 ),
                 Variable(
                     name="wind_speed",
-                    canonical_unit="m/s",
+                    canonical_unit="km/h",
                     agg_method=AggMethod.MAX,
                     description="Wind speed at 10m",
                 ),
@@ -264,6 +265,17 @@ class VariableCatalog:
 # ── Unit conversion ─────────────────────────────────────────────────
 
 
+@functools.cache
+def _canonical_units() -> dict[str, str]:
+    return {v.name: v.canonical_unit for v in VariableCatalog.default()._variables.values()}
+
+
+def _keep_canonical_spelling(variable: str, raw_lower: str) -> str:
+    """'hpa' -> 'hPa': a unit equal to the canonical one (ignoring case) is the canonical one."""
+    canonical = _canonical_units().get(variable)
+    return canonical if canonical is not None and canonical.lower() == raw_lower else raw_lower
+
+
 def convert_unit(
     value: float,
     raw_unit: str,
@@ -293,8 +305,8 @@ def convert_unit(
             return (value, "mm")
         return (value, raw_lower)
 
-    # For all other variables, pass through
-    return (value, raw_lower)
+    # For all other variables, pass through (keeping the catalog's spelling, e.g. 'hPa')
+    return (value, _keep_canonical_spelling(variable, raw_lower))
 
 
 # ── RawReading ──────────────────────────────────────────────────────
@@ -370,6 +382,16 @@ class RawReading:
 
 
 # ── Observation ─────────────────────────────────────────────────────
+
+
+def compute_idempotency_key(cell: str, variable: str, source: str, timestamp: datetime) -> str:
+    """Deterministic key: hash of (cell, variable, source, UTC timestamp).
+
+    Shared by ``Observation.from_raw`` and the cold store, which does not persist
+    the key (it is fully derivable from the stored columns) and recomputes it on read.
+    """
+    key_input = f"{cell}|{variable}|{source}|{timestamp.astimezone(UTC).isoformat()}"
+    return hashlib.sha256(key_input.encode("utf-8")).hexdigest()[:16]
 
 
 class Observation:
@@ -470,9 +492,7 @@ class Observation:
         ts_utc = ts.astimezone(UTC)
         converted_value, canonical_unit = convert_unit(val, unit_str, var, interval_hours)
 
-        # Deterministic idempotency key: hash of (cell, variable, source, timestamp_iso)
-        key_input = f"{target_cell}|{var}|{src}|{ts_utc.isoformat()}"
-        key = hashlib.sha256(key_input.encode("utf-8")).hexdigest()[:16]
+        key = compute_idempotency_key(target_cell, var, src, ts_utc)
 
         return cls(
             cell=target_cell,
