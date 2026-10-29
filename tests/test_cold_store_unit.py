@@ -312,6 +312,8 @@ def test_credentials_can_be_overridden_from_the_environment() -> None:
 @pytest.fixture
 def india_local_time(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Process-local timezone = IST (UTC+05:30), like the WSL machine this bug appeared on."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("time.tzset() is POSIX-only (unavailable on Windows)")
     monkeypatch.setenv("TZ", "IST-5:30")  # POSIX form: needs no tz database
     time.tzset()
     yield
