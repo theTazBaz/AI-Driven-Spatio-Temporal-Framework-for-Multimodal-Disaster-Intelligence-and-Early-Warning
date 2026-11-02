@@ -499,7 +499,7 @@ class HotStore:
 
 
 def _b(x: str | bytes) -> bytes:
-    return x if isinstance(x, bytes) else x.encode('utf-8')
+    return x if isinstance(x, bytes) else x.encode("utf-8")
 
 
 class FakeRedis:
@@ -522,7 +522,7 @@ class FakeRedis:
             items[key] = value
         for field, blob in items.items():
             if not isinstance(blob, bytes):
-                raise TypeError('FakeRedis only stores bytes values here')
+                raise TypeError("FakeRedis only stores bytes values here")
             table[_b(field)] = blob
         return len(items)
 
@@ -550,9 +550,10 @@ class FakeRedis:
 
     def scan_iter(self, match: Any = None, count: Any = None) -> Iterator[bytes]:
         import fnmatch
+
         for name in list(self.hashes):
             if match is None or fnmatch.fnmatchcase(name, match):
-                yield name.encode('utf-8')
+                yield name.encode("utf-8")
 
     def memory_usage(self, key: str) -> int | None:
         table = self.hashes.get(key)
@@ -574,21 +575,21 @@ class FakePipeline:
         return self
 
     def hmget(self, name: str, keys: Any, *args: Any) -> FakePipeline:
-        return self._queue('hmget', name, keys, *args)
+        return self._queue("hmget", name, keys, *args)
 
     def hgetall(self, name: str) -> FakePipeline:
-        return self._queue('hgetall', name)
+        return self._queue("hgetall", name)
 
     def hset(
         self, name: str, key: Any = None, value: Any = None, mapping: Any = None
     ) -> FakePipeline:
-        return self._queue('hset', name, key=key, value=value, mapping=mapping)
+        return self._queue("hset", name, key=key, value=value, mapping=mapping)
 
     def hdel(self, name: str, *keys: Any) -> FakePipeline:
-        return self._queue('hdel', name, *keys)
+        return self._queue("hdel", name, *keys)
 
     def expire(self, name: str, time: Any) -> FakePipeline:
-        return self._queue('expire', name, time)
+        return self._queue("expire", name, time)
 
     def execute(self) -> list[Any]:
         self._parent.round_trips += 1
