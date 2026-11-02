@@ -114,8 +114,7 @@ class KafkaTransport(Protocol):
         value: bytes,
         headers: list[tuple[str, bytes]],
         timestamp_ms: int,
-    ) -> int:
-        ...
+    ) -> int: ...
 
     def poll(
         self,
@@ -123,41 +122,35 @@ class KafkaTransport(Protocol):
         group_id: str,
         max_messages: int,
         auto_commit: bool,
-    ) -> list[KafkaRecord]:
-        ...
+    ) -> list[KafkaRecord]: ...
 
     def commit(
         self,
         topic: str,
         group_id: str,
         offset: int | None = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def seek(
         self,
         topic: str,
         group_id: str,
         offset: int,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def get_offset(
         self,
         topic: str,
         group_id: str,
-    ) -> int:
-        ...
+    ) -> int: ...
 
     def ensure_topic(
         self,
         topic: str,
         retention_ms: int,
-    ) -> None:
-        ...
+    ) -> None: ...
 
-    def close(self) -> None:
-        ...
+    def close(self) -> None: ...
 
 
 class FakeKafkaTransport:
@@ -533,8 +526,7 @@ class RedpandaBus(Bus):
         messages: list[Message] = []
         for r in records:
             headers_dict = {
-                k: (v.decode("utf-8") if isinstance(v, bytes) else str(v))
-                for k, v in r.headers
+                k: (v.decode("utf-8") if isinstance(v, bytes) else str(v)) for k, v in r.headers
             }
             payload = deserialize_payload(r.value, headers_dict)
             ts = datetime.fromtimestamp(r.timestamp_ms / 1000.0, tz=UTC)

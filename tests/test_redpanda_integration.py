@@ -76,4 +76,3 @@ def test_real_redpanda_pipeline_replay() -> None:
     assert metrics.raw_readings_received == 24
     assert metrics.observations_stored == metrics.observations_produced
     assert sink.count() == metrics.observations_stored
-

@@ -182,20 +182,14 @@ class StateAssembler:
             values.append(float(getattr(static, name)))
             coverage.append(None)
         if spec.imagery:
-            im_map = (
-                self._imagery.get_features(cell, when)
-                if self._imagery is not None
-                else None
-            )
+            im_map = self._imagery.get_features(cell, when) if self._imagery is not None else None
             for name in spec.imagery:
                 if im_map is not None and name in im_map:
                     val = im_map[name]
                     values.append(val if not math.isnan(val) else NAN)
                     if name in V2_EMBEDDING_FEATURES:
                         cov = im_map.get("embedding_coverage")
-                        coverage.append(
-                            cov if cov is not None and not math.isnan(cov) else None
-                        )
+                        coverage.append(cov if cov is not None and not math.isnan(cov) else None)
                     else:
                         coverage.append(None)
                 else:

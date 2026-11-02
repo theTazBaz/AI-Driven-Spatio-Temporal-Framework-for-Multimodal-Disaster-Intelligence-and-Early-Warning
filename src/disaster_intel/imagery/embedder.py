@@ -22,9 +22,7 @@ class Embedder(Protocol):
         """Embedding dimension size."""
         ...
 
-    def embed_chip(
-        self, chip: SatelliteChip, image_data: np.ndarray | None = None
-    ) -> np.ndarray:
+    def embed_chip(self, chip: SatelliteChip, image_data: np.ndarray | None = None) -> np.ndarray:
         """Embed an imagery chip into a grid of patch tokens.
 
         Returns:
@@ -52,9 +50,7 @@ class FakeEmbedder:
     def embed_dim(self) -> int:
         return self._embed_dim
 
-    def embed_chip(
-        self, chip: SatelliteChip, image_data: np.ndarray | None = None
-    ) -> np.ndarray:
+    def embed_chip(self, chip: SatelliteChip, image_data: np.ndarray | None = None) -> np.ndarray:
         ny = chip.height_px // chip.patch_size_px
         nx = chip.width_px // chip.patch_size_px
 
@@ -107,9 +103,7 @@ class PrithviEmbedder:
     def embed_dim(self) -> int:
         return self._embed_dim
 
-    def embed_chip(
-        self, chip: SatelliteChip, image_data: np.ndarray | None = None
-    ) -> np.ndarray:
+    def embed_chip(self, chip: SatelliteChip, image_data: np.ndarray | None = None) -> np.ndarray:
         ny = chip.height_px // chip.patch_size_px
         nx = chip.width_px // chip.patch_size_px
 
@@ -124,9 +118,7 @@ class PrithviEmbedder:
             image_data = image_data[0]
 
         if image_data.shape[0] != self.in_channels:
-            raise ValueError(
-                f"Expected {self.in_channels} input bands, got {image_data.shape[0]}"
-            )
+            raise ValueError(f"Expected {self.in_channels} input bands, got {image_data.shape[0]}")
 
         # Patch extraction and projection
         # image_data: (C, H, W)
