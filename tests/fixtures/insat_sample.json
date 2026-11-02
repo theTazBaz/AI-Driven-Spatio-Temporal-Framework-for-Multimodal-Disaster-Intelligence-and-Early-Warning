@@ -1,0 +1,49 @@
+{
+  "satellite": "INSAT-3DR",
+  "sensor": "Imager",
+  "channel": "TIR-1 (10.8 um)",
+  "timestamp": "2024-07-16T12:00:00Z",
+  "interval_minutes": 15,
+  "readings": [
+    {
+      "lat": 12.9141,
+      "lon": 74.8560,
+      "cloud_top_tb": 204.5,
+      "previous_tb": 221.0,
+      "cooling_rate": -16.5,
+      "description": "Mangalore severe cumulonimbus storm cell (Tb=204.5 K, dT/dt=-16.5 K/15min)"
+    },
+    {
+      "lat": 13.3408,
+      "lon": 74.7421,
+      "cloud_top_tb": 208.2,
+      "previous_tb": 219.5,
+      "cooling_rate": -11.3,
+      "description": "Udupi deep convective storm development (Tb=208.2 K, dT/dt=-11.3 K/15min)"
+    },
+    {
+      "lat": 14.8150,
+      "lon": 74.1320,
+      "cloud_top_tb": 235.0,
+      "previous_tb": 236.0,
+      "cooling_rate": -1.0,
+      "description": "Karwar moderate stratiform cloud deck (Tb=235.0 K)"
+    },
+    {
+      "lat": 14.2800,
+      "lon": 74.4500,
+      "cloud_top_tb": 292.0,
+      "previous_tb": 292.5,
+      "cooling_rate": -0.5,
+      "description": "Bhatkal clear sea-level surface (Tb=292.0 K)"
+    },
+    {
+      "lat": 13.9100,
+      "lon": 75.5700,
+      "cloud_top_tb": 198.5,
+      "previous_tb": 217.0,
+      "cooling_rate": -18.5,
+      "description": "Western Ghats intense orographic convective cluster (Tb=198.5 K, dT/dt=-18.5 K/15min)"
+    }
+  ]
+}

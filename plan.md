@@ -1067,6 +1067,16 @@ supports both:
 
 | **Done when** | 15-minute observations stream to the bus; rolling window aggregator and zero-order hold correctly compute hourly and multi-hour convective metrics. |
 
+> **As built (Increment 16):**
+> `src/disaster_intel/adapters/insat.py` implements `INSATAdapter(SourceAdapter)` with 15-minute thermal infrared
+> cloud-top brightness temperature ($T_B$) extraction, deep convective storm detection ($T_B \le 210.0\text{ K}$),
+> convective cooling rate computation ($\Delta T_B / \Delta t \le -10\text{ K}/15\text{min}$), and stateful multi-scan history tracking.
+> Registered `insat_cloud_top_tb` (canonical unit `"K"`, `AggMethod.MIN`) and `insat_convective_cooling_rate`
+> (canonical unit `"K/15min"`, `AggMethod.MIN`) in `VariableCatalog.default()` and `convert_unit()`.
+> 15 unit tests in `tests/test_insat_adapter.py` verify temperature physics, cold-top thresholds, cooling rates,
+> stateful sequential scan tracking, error attribution, golden fixture replay (`tests/fixtures/insat_sample.json`),
+> and pipeline integration. Verified with `pytest -m unit` (343 passed).
+
 
 
 ---

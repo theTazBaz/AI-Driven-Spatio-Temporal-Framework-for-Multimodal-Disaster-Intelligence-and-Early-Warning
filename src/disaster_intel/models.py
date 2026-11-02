@@ -270,6 +270,18 @@ class VariableCatalog:
                     agg_method=AggMethod.AVG,
                     description="Sentinel-1 C-SAR VH cross-polarization backscatter in dB",
                 ),
+                Variable(
+                    name="insat_cloud_top_tb",
+                    canonical_unit="K",
+                    agg_method=AggMethod.MIN,
+                    description="ISRO INSAT-3D/3DR cloud-top brightness temperature (TIR-1)",
+                ),
+                Variable(
+                    name="insat_convective_cooling_rate",
+                    canonical_unit="K/15min",
+                    agg_method=AggMethod.MIN,
+                    description="ISRO INSAT-3D/3DR convective cloud-top cooling rate (dT_B / dt)",
+                ),
             ]
         )
 
@@ -327,6 +339,20 @@ def convert_unit(
     if variable == "sar_vh_backscatter_db":
         if raw_lower in ("db", "decibel", "decibels"):
             return (value, "dB")
+        return (value, raw_lower)
+
+    if variable == "insat_cloud_top_tb":
+        if raw_lower in ("celsius", "c", "°c"):
+            return (value + 273.15, "K")
+        if raw_lower in ("kelvin", "k", ""):
+            return (value, "K")
+        return (value, raw_lower)
+
+    if variable == "insat_convective_cooling_rate":
+        if raw_lower in ("k/15min", "k/15m", "k/15_min", ""):
+            return (value, "K/15min")
+        if raw_lower in ("k/h", "k/hr", "k/hour"):
+            return (value / 4.0, "K/15min")
         return (value, raw_lower)
 
     # For all other variables, pass through (keeping the catalog's spelling, e.g. 'hPa')
