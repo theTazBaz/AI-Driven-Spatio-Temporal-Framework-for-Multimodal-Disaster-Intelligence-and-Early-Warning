@@ -44,6 +44,13 @@ V1_DYNAMIC_VARIABLES: tuple[str, ...] = (
 V1_WINDOWS: tuple[str, ...] = ("1h", "6h", "24h", "72h", "7d")
 V1_STATIC: tuple[str, ...] = ("elevation_m", "slope_deg", "population_density_km2")
 
+V2_IMAGERY_EMBED_DIMS: int = 32
+V2_EMBEDDING_FEATURES: tuple[str, ...] = tuple(
+    f"embedding_{i:02d}" for i in range(V2_IMAGERY_EMBED_DIMS)
+)
+V2_IMAGERY_METADATA: tuple[str, ...] = ("embedding_age_hours", "embedding_coverage")
+V2_IMAGERY: tuple[str, ...] = V2_EMBEDDING_FEATURES + V2_IMAGERY_METADATA
+
 
 class SpecMismatchError(ValueError):
     """A stored vector (or a request) does not match the FeatureSpec in use."""
@@ -81,12 +88,15 @@ class FeatureSpec:
     static: tuple[str, ...]
     derived: tuple[DerivedFeature, ...]
     definitions: Mapping[str, str]  # feature name -> human-readable definition (fingerprinted)
+    imagery: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         names = self.names
         if len(set(names)) != len(names):
             raise ValueError("FeatureSpec has duplicate feature names")
-        seen: set[str] = {feature_name(v, w) for v, w in self.dynamic} | set(self.static)
+        seen: set[str] = (
+            {feature_name(v, w) for v, w in self.dynamic} | set(self.static) | set(self.imagery)
+        )
         for d in self.derived:
             if d.left not in seen or d.right not in seen:
                 raise ValueError(f"Derived feature {d.name!r} uses an unknown input")
@@ -124,6 +134,50 @@ class FeatureSpec:
             static=V1_STATIC,
             derived=derived,
             definitions=definitions,
+            imagery=(),
+        )
+
+    @classmethod
+    def v2(cls, catalog: VariableCatalog | None = None) -> FeatureSpec:
+        cat = catalog or VariableCatalog.default()
+        dynamic = tuple((v, w) for v in V1_DYNAMIC_VARIABLES for w in V1_WINDOWS)
+        definitions: dict[str, str] = {}
+        for variable, window in dynamic:
+            var = cat[variable]
+            definitions[feature_name(variable, window)] = (
+                f"{var.agg_method.name} of {variable} [{var.canonical_unit}] "
+                f"over the last {WINDOW_HOURS[window]} hour-ending buckets"
+            )
+        for name in V1_STATIC:
+            definitions[name] = f"static layer {name}"
+        for i, name in enumerate(V2_EMBEDDING_FEATURES):
+            definitions[name] = (
+                f"PCA dimension {i:02d} of Prithvi-EO-2.0 satellite embedding (float16)"
+            )
+        definitions["embedding_age_hours"] = (
+            "Hours elapsed since latest valid satellite imagery acquisition as of as_of; "
+            "NaN if none"
+        )
+        definitions["embedding_coverage"] = (
+            "Fraction of cell covered by valid non-cloudy imagery patches [0.0, 1.0]"
+        )
+        derived = (
+            DerivedFeature(
+                name="compound_saturation",
+                left="soil_moisture_rootzone__24h",
+                right="precipitation__72h",
+            ),
+        )
+        definitions["compound_saturation"] = (
+            "soil_moisture_rootzone__24h * precipitation__72h; NaN if either is missing"
+        )
+        return cls(
+            version=2,
+            dynamic=dynamic,
+            static=V1_STATIC,
+            derived=derived,
+            definitions=definitions,
+            imagery=V2_IMAGERY,
         )
 
     # ── layout ───────────────────────────────────────────────────────
@@ -133,11 +187,12 @@ class FeatureSpec:
         return (
             *(feature_name(v, w) for v, w in self.dynamic),
             *self.static,
+            *self.imagery,
             *(d.name for d in self.derived),
         )
 
     def __len__(self) -> int:
-        return len(self.dynamic) + len(self.static) + len(self.derived)
+        return len(self.dynamic) + len(self.static) + len(self.imagery) + len(self.derived)
 
     def index(self, name: str) -> int:
         try:

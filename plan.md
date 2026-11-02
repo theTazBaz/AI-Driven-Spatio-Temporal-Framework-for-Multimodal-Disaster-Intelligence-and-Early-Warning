@@ -298,6 +298,17 @@ numbers.
 | **Tests written first** | Chips centred on res-6 parent cover centres of its 7 children; every patch centre maps to exactly one cell; pooling = mean of patches in each cell (fake embedder); each cell carries coverage fraction; cloudy scene skipped → previous embedding keeps ageing; PCA output is deterministic float16 within storage budget. **Slow test:** real Prithvi on one small chip gives correct shape, no NaN, same output twice |
 | **Done when** | Embedding, its age and its coverage appended to `FeatureSpec` (version 2) |
 
+> **As built (Increment 11):**
+> `src/disaster_intel/imagery/` implements `Embedder` protocol, `FakeEmbedder`,
+> `PrithviEmbedder` (NASA Prithvi-EO-2.0 6-band optical foundation model), `SatelliteChip`
+> (centred on res-6 parents covering centres of all 7 children, 14x14 patch grid),
+> `pool_chip_to_cells` (arithmetic mean over valid patches, per-cell coverage calculation),
+> `PCAReducer` (deterministic SVD/projection to 32 dimensions in `float16`, exactly 64 bytes/cell
+> satisfying storage budget), and `SceneRegistry` (skips cloudy scenes > 30% cloud cover,
+> persists and ages previous valid embeddings). Appended 32 PCA dims, `embedding_age_hours`,
+> and `embedding_coverage` to `FeatureSpec.v2()` (total 63 features).
+> Verified by 10 tests in `tests/test_embedder.py` (all passing).
+
 ### Increment 12 — RedpandaBus and the Bus Switch
 
 | | |
@@ -305,6 +316,17 @@ numbers.
 | **Build** | `RedpandaBus` implementation and configuration switch |
 | **Tests written first** | Same bus contract suite passes **unchanged**; killing and restarting a consumer loses nothing and duplicates are dropped; topic retention is 24–72 hours; throughput smoke test sustains expected message rate |
 | **Done when** | Config switch `bus: memory` ↔ `bus: redpanda` with end-to-end run on real containers |
+
+> **As built (Increment 12):**
+> `src/disaster_intel/bus/redpanda.py` implements `RedpandaBus(Bus)` with Kafka protocol support
+> (via pure-Python `kafka-python-ng`), typed message serialization/deserialization (preserving
+> `Observation` dataclasses, dicts, strings, and byte payloads), topic retention configuration
+> strictly enforcing the 24–72 hour storage budget policy, bounded queue backpressure via
+> `BufferFullError`, and pluggable transport (`RealKafkaTransport` for live Redpanda and
+> `FakeKafkaTransport` for socketless unit tests). `get_bus("memory" | "redpanda")` provides the
+> configuration switch (also controlled by `DISASTER_INTEL_BUS`). Verified by 23 unit tests in
+> `tests/test_redpanda_bus.py` (reusing `BaseBusContractTests` unchanged) and 9 container tests
+> in `tests/test_redpanda_integration.py`.
 
 ### Increment 13 — Backfill Mode and Phase 1 Evaluation Report
 
@@ -321,6 +343,20 @@ numbers.
 >
 > Backfill uses the same adapters with historical time windows, so it **doubles as
 > the training-data pipeline for Objective 3**.
+>
+> **As built (Increment 13):**
+> `src/disaster_intel/backfill.py` implements `BackfillEngine`, `HistoricalWindow`, and benchmark
+> disaster windows (`shirur_landslide_2024`, `uttara_kannada_floods_2021`, `kodagu_floods_2018`,
+> and `quiet_period_baseline`). Provides idempotent replay (replaying identical window yields 0
+> duplicate records stored) and high throughput (>100x to >1,000,000x real-time speedup).
+> `src/disaster_intel/evaluation.py` implements `Phase1Evaluator` and `Phase1EvaluationReport`,
+> evaluating all Objective 1 and Objective 2 criteria from Section 15: ingestion latency percentiles
+> (p50/p95/p99), 100% completion rate with failure attribution, hot-tier p95 read latency (<5ms),
+> 100% cold-tier correctness vs arrival copy, 100% rolling window correctness vs Python oracle,
+> deterministic rollback (recomputing past T equals live T), and strict storage budgets validation
+> (ClickHouse delta+ZSTD, 64-byte embeddings, <=8KB Redis). `make evaluate` and `scripts/evaluate.py`
+> run the full evaluation demo for the 7th-semester review. Verified by 5 tests in
+> `tests/test_backfill.py` (301 total unit tests passing).
 
 ---
 

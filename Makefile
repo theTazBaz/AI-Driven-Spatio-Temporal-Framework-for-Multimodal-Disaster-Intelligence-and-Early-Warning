@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-contract test-integration test-perf test-all lint fmt typecheck up down clean demo-hot rebuild-hot demo-state static-layers static-layers-offline
+.PHONY: evaluate test test-unit test-contract test-integration test-perf test-all lint fmt typecheck up down clean demo-hot rebuild-hot demo-state static-layers static-layers-offline
 
 # ── Testing ──────────────────────────────────────────────────────────
 test: test-unit  ## Default: run unit tests only (< 10 s)
@@ -45,6 +45,10 @@ static-layers:  ## Build elevation/slope (Copernicus DEM via Open-Meteo); add PO
 
 static-layers-offline:  ## Same, with SYNTHETIC terrain (no network; for demos only)
 	uv run python -m disaster_intel.state.static_layers build --source synthetic
+
+# ── Evaluation & Benchmarking (Increment 13) ────────────────────────
+evaluate:  ## Run Phase 1 evaluation demo & generate metrics report
+	uv run python -m disaster_intel.evaluation
 
 # ── Infrastructure ───────────────────────────────────────────────────
 up:  ## Start ClickHouse, Redis, Redpanda

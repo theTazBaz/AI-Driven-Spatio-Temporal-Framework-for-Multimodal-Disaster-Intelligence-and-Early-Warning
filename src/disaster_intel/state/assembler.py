@@ -29,7 +29,7 @@ from typing import Literal, Protocol
 import h3
 
 from disaster_intel.clock import Clock, SystemClock
-from disaster_intel.state.spec import NAN, FeatureSpec, StateVector
+from disaster_intel.state.spec import NAN, V2_EMBEDDING_FEATURES, FeatureSpec, StateVector
 from disaster_intel.state.static_layers import StaticLookup
 from disaster_intel.storage.hot import HotRangeError
 from disaster_intel.windows import WINDOW_HOURS, WindowValue
@@ -48,6 +48,12 @@ class WindowSource(Protocol):
         source: str | None = None,
         window_hours: Mapping[str, int] | None = None,
     ) -> Windows: ...
+
+
+class ImageryLookup(Protocol):
+    """Source providing satellite imagery features for cell and timestamp."""
+
+    def get_features(self, cell: str, as_of: datetime) -> Mapping[str, float]: ...
 
 
 @dataclass(frozen=True)
@@ -70,6 +76,7 @@ class StateAssembler:
         static: StaticLookup,
         hot: WindowSource | None = None,
         cold: WindowSource | None = None,
+        imagery: ImageryLookup | None = None,
         spec: FeatureSpec | None = None,
         clock: Clock | None = None,
     ) -> None:
@@ -78,6 +85,7 @@ class StateAssembler:
         self._static = static
         self._hot = hot
         self._cold = cold
+        self._imagery = imagery
         self._spec = spec or FeatureSpec.v1()
         self._clock: Clock = clock or SystemClock()
         self._window_hours = {w: WINDOW_HOURS[w] for w in self._spec.windows}
@@ -173,6 +181,26 @@ class StateAssembler:
         for name in spec.static:
             values.append(float(getattr(static, name)))
             coverage.append(None)
+        if spec.imagery:
+            im_map = (
+                self._imagery.get_features(cell, when)
+                if self._imagery is not None
+                else None
+            )
+            for name in spec.imagery:
+                if im_map is not None and name in im_map:
+                    val = im_map[name]
+                    values.append(val if not math.isnan(val) else NAN)
+                    if name in V2_EMBEDDING_FEATURES:
+                        cov = im_map.get("embedding_coverage")
+                        coverage.append(
+                            cov if cov is not None and not math.isnan(cov) else None
+                        )
+                    else:
+                        coverage.append(None)
+                else:
+                    values.append(NAN)
+                    coverage.append(None)
         known = dict(zip(spec.names, values, strict=False))
         for derived in spec.derive(known):
             values.append(derived)

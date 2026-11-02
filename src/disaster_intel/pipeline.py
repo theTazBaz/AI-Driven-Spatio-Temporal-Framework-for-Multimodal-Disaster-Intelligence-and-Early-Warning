@@ -24,8 +24,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from disaster_intel.adapters.base import SourceAdapter
 from disaster_intel.adapters.open_meteo import OpenMeteoAdapter
-from disaster_intel.bus.base import Bus
-from disaster_intel.bus.memory import InMemoryBus
+from disaster_intel.bus import Bus, InMemoryBus, get_bus
 from disaster_intel.clock import Clock, FakeClock, SystemClock
 from disaster_intel.discretizers import SpatialDiscretizer
 from disaster_intel.grid import CoastalGrid
@@ -276,6 +275,8 @@ def run_replay_fixture(
     fixture_path: Path | str,
     grid: CoastalGrid | None = None,
     clock: Clock | None = None,
+    bus: Bus | str | None = None,
+    sink: ObservationSink | None = None,
 ) -> IngestionMetrics:
     """Replay a recorded JSON fixture through the complete pipeline."""
     target_grid = grid or CoastalGrid(use_cache=True)
@@ -297,15 +298,21 @@ def run_replay_fixture(
         else:
             clock = SystemClock()
 
-    bus = InMemoryBus()
-    sink = InMemorySink()
+    if isinstance(bus, Bus):
+        active_bus = bus
+    elif isinstance(bus, str):
+        active_bus = get_bus(bus)
+    else:
+        active_bus = InMemoryBus()
+
+    active_sink = sink or InMemorySink()
     discretizer = SpatialDiscretizer(grid=target_grid)
 
     pipeline = IngestionPipeline(
         adapter=adapter,
         discretizer=discretizer,
-        bus=bus,
-        sink=sink,
+        bus=active_bus,
+        sink=active_sink,
         clock=clock,
     )
 
@@ -334,18 +341,24 @@ def main() -> None:
         default=10,
         help="Max unique weather grid nodes to query in live mode (default: 10)",
     )
+    parser.add_argument(
+        "--bus",
+        choices=["memory", "redpanda"],
+        default=None,
+        help="Streaming bus to use (default: $DISASTER_INTEL_BUS or memory)",
+    )
 
     args = parser.parse_args()
 
     if args.replay:
         print(f"Replaying fixture: {args.replay}...")
-        metrics = run_replay_fixture(args.replay)
+        metrics = run_replay_fixture(args.replay, bus=args.bus)
         print(metrics.summary())
     elif args.live:
         print("Starting live ingestion cycle...")
         grid = CoastalGrid(use_cache=True)
         discretizer = SpatialDiscretizer(grid=grid)
-        bus = InMemoryBus()
+        bus = get_bus(args.bus) if args.bus else InMemoryBus()
         sink = InMemorySink()
         clock = SystemClock()
         adapter = OpenMeteoAdapter(clock=clock)

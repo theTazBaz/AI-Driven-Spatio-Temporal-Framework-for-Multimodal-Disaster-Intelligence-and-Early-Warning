@@ -14,6 +14,7 @@ dependencies = [
     "clickhouse-connect>=1.11.0",
     "h3>=4.5.0",
     "httpx>=0.28.1",
+    "kafka-python-ng>=2.2.3",
     "redis>=5.0",
 ]
 
@@ -81,4 +82,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["rasterio.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["kafka.*"]
 ignore_missing_imports = true

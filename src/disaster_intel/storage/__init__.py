@@ -12,6 +12,8 @@ from disaster_intel.storage.cold import (
     to_float32,
 )
 from disaster_intel.storage.hot import (
+    FakePipeline,
+    FakeRedis,
     HotFormatError,
     HotRangeError,
     HotStore,
@@ -28,6 +30,8 @@ __all__ = [
     "ClickHouseClient",
     "ColdStore",
     "CorrectnessReport",
+    "FakePipeline",
+    "FakeRedis",
     "HotFormatError",
     "HotRangeError",
     "HotStore",

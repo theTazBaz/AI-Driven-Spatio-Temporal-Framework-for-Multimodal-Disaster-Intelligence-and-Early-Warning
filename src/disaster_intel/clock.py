@@ -65,3 +65,14 @@ class FakeClock:
         from datetime import timedelta
 
         self._current_time += timedelta(seconds=seconds)
+
+    def advance_to(self, target_time: datetime) -> None:
+        """Advance clock forward to an explicit timestamp."""
+        if target_time.tzinfo is None:
+            raise ValueError("Target time must be timezone-aware")
+        target_utc = target_time.astimezone(UTC)
+        if target_utc < self._current_time:
+            msg = f"Cannot advance clock backward: {self._current_time} to {target_utc}"
+            raise ValueError(msg)
+        delta = (target_utc - self._current_time).total_seconds()
+        self.advance(delta)

@@ -10,6 +10,13 @@ from disaster_intel.adapters import (
     SourceAdapter,
     SourceError,
 )
+from disaster_intel.backfill import (
+    BENCHMARK_WINDOWS,
+    BackfillEngine,
+    BackfillResult,
+    HistoricalWindow,
+    generate_historical_spell,
+)
 from disaster_intel.bus import (
     BufferFullError,
     Bus,
@@ -25,6 +32,11 @@ from disaster_intel.discretizers import (
     PolygonDiscretizer,
     SpatialDiscretizer,
     point_in_polygon,
+)
+from disaster_intel.evaluation import (
+    Phase1EvaluationReport,
+    Phase1Evaluator,
+    run_evaluation_demo,
 )
 from disaster_intel.grid import CoastalGrid
 from disaster_intel.models import (
@@ -49,9 +61,12 @@ from disaster_intel.pipeline import (
 )
 
 __all__ = [
+    "BENCHMARK_WINDOWS",
     "AdapterError",
     "AdapterMetrics",
     "AggMethod",
+    "BackfillEngine",
+    "BackfillResult",
     "BufferFullError",
     "Bus",
     "BusError",
@@ -63,6 +78,7 @@ __all__ = [
     "Geometry",
     "GridNodeDiscretizer",
     "GridNodeGeometry",
+    "HistoricalWindow",
     "InMemoryBus",
     "InMemorySink",
     "IngestionMetrics",
@@ -72,6 +88,8 @@ __all__ = [
     "ObservationSink",
     "OpenMeteoAdapter",
     "ParseError",
+    "Phase1EvaluationReport",
+    "Phase1Evaluator",
     "PointDiscretizer",
     "PointGeometry",
     "PolygonDiscretizer",
@@ -85,6 +103,8 @@ __all__ = [
     "VariableCatalog",
     "__version__",
     "calculate_percentiles",
+    "generate_historical_spell",
     "point_in_polygon",
+    "run_evaluation_demo",
     "run_replay_fixture",
 ]

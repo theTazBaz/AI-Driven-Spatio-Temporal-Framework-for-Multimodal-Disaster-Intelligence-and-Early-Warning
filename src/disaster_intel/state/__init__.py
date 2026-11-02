@@ -1,7 +1,14 @@
 """Increment 10 - state vector assembler and static geographic layers (Objective 2)."""
 
-from disaster_intel.state.assembler import StateAssembler, TierComparison, WindowSource
+from disaster_intel.state.assembler import (
+    ImageryLookup,
+    StateAssembler,
+    TierComparison,
+    WindowSource,
+)
 from disaster_intel.state.spec import (
+    V2_EMBEDDING_FEATURES,
+    V2_IMAGERY,
     DerivedFeature,
     FeatureSpec,
     SpecMismatchError,
@@ -27,10 +34,13 @@ from disaster_intel.state.static_layers import (
 
 __all__ = [
     "DEFAULT_STATIC_PATH",
+    "V2_EMBEDDING_FEATURES",
+    "V2_IMAGERY",
     "DerivedFeature",
     "ElevationSource",
     "FeatureSpec",
     "FunctionElevation",
+    "ImageryLookup",
     "OpenMeteoElevation",
     "RasterElevation",
     "RasterGrid",
