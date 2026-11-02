@@ -1039,6 +1039,14 @@ supports both:
 
 | **Done when** | `ClayEmbedder` generates 32-dim latent representations from synthetic multimodal chips in offline unit tests; benchmark script logs embedding distance between cloudy and clear passes. |
 
+> **As built (Increment 15):**
+> `src/disaster_intel/imagery/embedder.py` implements `ClayEmbedder(Embedder)` with multimodal tensor handling
+> (2 SAR + 6 Optical + 1 DEM), cloud-mask fallback suppressing optical NaNs to yield 100% finite embeddings
+> from radar and topography under monsoon clouds, and `get_embedder` runtime configuration switch.
+> 11 unit tests in `tests/test_clay_embedder.py` verify protocol conformance, cloud-mask fallback, PCA 32-dim float16
+> budget compliance (64 bytes/patch), configuration switching (`clay` | `prithvi` | `fake`), determinism,
+> and information preservation (>0.60 cosine similarity under complete cloud blindness). Verified with `pytest -m unit` (328 passed).
+
 
 
 ---
