@@ -258,6 +258,18 @@ class VariableCatalog:
                     agg_method=AggMethod.MAX,
                     description="CAP alert severity level (Minor/Moderate/Severe/Extreme)",
                 ),
+                Variable(
+                    name="sar_water_fraction",
+                    canonical_unit="fraction",
+                    agg_method=AggMethod.MAX,
+                    description="Sentinel-1 SAR surface water coverage fraction (0.0 to 1.0)",
+                ),
+                Variable(
+                    name="sar_vh_backscatter_db",
+                    canonical_unit="dB",
+                    agg_method=AggMethod.AVG,
+                    description="Sentinel-1 C-SAR VH cross-polarization backscatter in dB",
+                ),
             ]
         )
 
@@ -303,6 +315,18 @@ def convert_unit(
             return (value * interval_hours, "mm")
         if raw_lower == "mm":
             return (value, "mm")
+        return (value, raw_lower)
+
+    if variable == "sar_water_fraction":
+        if raw_lower in ("%", "percent"):
+            return (value / 100.0, "fraction")
+        if raw_lower in ("fraction", "ratio", "1", ""):
+            return (value, "fraction")
+        return (value, raw_lower)
+
+    if variable == "sar_vh_backscatter_db":
+        if raw_lower in ("db", "decibel", "decibels"):
+            return (value, "dB")
         return (value, raw_lower)
 
     # For all other variables, pass through (keeping the catalog's spelling, e.g. 'hPa')
