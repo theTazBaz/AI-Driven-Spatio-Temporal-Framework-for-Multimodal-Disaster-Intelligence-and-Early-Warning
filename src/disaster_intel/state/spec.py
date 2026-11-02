@@ -51,6 +51,29 @@ V2_EMBEDDING_FEATURES: tuple[str, ...] = tuple(
 V2_IMAGERY_METADATA: tuple[str, ...] = ("embedding_age_hours", "embedding_coverage")
 V2_IMAGERY: tuple[str, ...] = V2_EMBEDDING_FEATURES + V2_IMAGERY_METADATA
 
+V3_DYNAMIC_VARIABLES: tuple[str, ...] = (
+    "precipitation",
+    "soil_moisture_surface",
+    "soil_moisture_rootzone",
+    "discharge",
+    "seismic_magnitude",
+    "sar_water_fraction",
+    "sar_vh_backscatter_db",
+    "insat_cloud_top_tb",
+    "insat_convective_cooling_rate",
+)
+V3_STATIC: tuple[str, ...] = (
+    "elevation_m",
+    "slope_deg",
+    "population_density_km2",
+    "gsi_susceptibility_index",
+    "gsi_lithology_cohesion",
+)
+V3_IMAGERY_EMBED_DIMS: int = 32
+V3_EMBEDDING_FEATURES: tuple[str, ...] = V2_EMBEDDING_FEATURES
+V3_IMAGERY_METADATA: tuple[str, ...] = V2_IMAGERY_METADATA
+V3_IMAGERY: tuple[str, ...] = V2_IMAGERY
+
 
 class SpecMismatchError(ValueError):
     """A stored vector (or a request) does not match the FeatureSpec in use."""
@@ -178,6 +201,62 @@ class FeatureSpec:
             derived=derived,
             definitions=definitions,
             imagery=V2_IMAGERY,
+        )
+
+    @classmethod
+    def v3(cls, catalog: VariableCatalog | None = None) -> FeatureSpec:
+        cat = catalog or VariableCatalog.default()
+        dynamic = tuple((v, w) for v in V3_DYNAMIC_VARIABLES for w in V1_WINDOWS)
+        definitions: dict[str, str] = {}
+        for variable, window in dynamic:
+            var = cat[variable]
+            definitions[feature_name(variable, window)] = (
+                f"{var.agg_method.name} of {variable} [{var.canonical_unit}] "
+                f"over the last {WINDOW_HOURS[window]} hour-ending buckets"
+            )
+        for name in V3_STATIC:
+            if name == "gsi_susceptibility_index":
+                definitions[name] = "GSI landslide susceptibility index [0, 1]"
+            elif name == "gsi_lithology_cohesion":
+                definitions[name] = "GSI rock cohesion factor [0, 1]"
+            else:
+                definitions[name] = f"static layer {name}"
+        for i, name in enumerate(V3_EMBEDDING_FEATURES):
+            definitions[name] = (
+                f"PCA dimension {i:02d} of multimodal foundation embedding (float16)"
+            )
+        definitions["embedding_age_hours"] = (
+            "Hours elapsed since latest valid satellite imagery acquisition as of as_of; "
+            "NaN if none"
+        )
+        definitions["embedding_coverage"] = (
+            "Fraction of cell covered by valid non-cloudy imagery patches [0.0, 1.0]"
+        )
+        derived = (
+            DerivedFeature(
+                name="compound_saturation",
+                left="soil_moisture_rootzone__24h",
+                right="precipitation__72h",
+            ),
+            DerivedFeature(
+                name="slope_shear_risk",
+                left="slope_deg",
+                right="gsi_susceptibility_index",
+            ),
+        )
+        definitions["compound_saturation"] = (
+            "soil_moisture_rootzone__24h * precipitation__72h; NaN if either is missing"
+        )
+        definitions["slope_shear_risk"] = (
+            "slope_deg * gsi_susceptibility_index; NaN if either is missing"
+        )
+        return cls(
+            version=3,
+            dynamic=dynamic,
+            static=V3_STATIC,
+            derived=derived,
+            definitions=definitions,
+            imagery=V3_IMAGERY,
         )
 
     # ── layout ───────────────────────────────────────────────────────

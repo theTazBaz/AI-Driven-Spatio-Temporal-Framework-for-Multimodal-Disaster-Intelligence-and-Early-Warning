@@ -19,6 +19,7 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from disaster_intel.backfill import (
@@ -42,6 +43,7 @@ from disaster_intel.windows import HOUR, WindowValue, reference_windows
 
 CATALOG = VariableCatalog.default()
 SPEC_V1 = FeatureSpec.v1()
+SPEC_V3 = FeatureSpec.v3()
 SHIRUR_CELL = "8760b526dffffff"
 MADIKERI_CELL = "872a1072bffffff"
 
@@ -544,9 +546,47 @@ def run_evaluation_demo(cell: str = SHIRUR_CELL) -> None:
     print(report.format_table())
 
 
+def generate_multimodal_benchmark_report(
+    output_path: Path | str = "PHASE1_MULTIMODAL_BENCHMARK.md",
+) -> str:
+    """Generate comprehensive Phase 1 Multimodal Benchmark Report markdown document."""
+    path = Path(output_path)
+    now_str = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    evaluator_shirur = Phase1Evaluator(window_name="shirur_landslide_2024")
+    shirur_report = evaluator_shirur.evaluate()
+
+    evaluator_floods = Phase1Evaluator(window_name="uttara_kannada_floods_2021")
+    floods_report = evaluator_floods.evaluate()
+
+    template_path = Path(__file__).parent / "templates" / "benchmark_template.md"
+    template = template_path.read_text(encoding="utf-8")
+
+    content = template.format(
+        now_str=now_str,
+        shirur_p50=shirur_report.ingestion_p50_ms,
+        shirur_p95=shirur_report.ingestion_p95_ms,
+        shirur_p99=shirur_report.ingestion_p99_ms,
+        shirur_completion=shirur_report.ingestion_completion_rate,
+        shirur_speedup=shirur_report.replay_speedup_factor,
+        floods_p50=floods_report.ingestion_p50_ms,
+        floods_p95=floods_report.ingestion_p95_ms,
+        floods_p99=floods_report.ingestion_p99_ms,
+        floods_completion=floods_report.ingestion_completion_rate,
+        floods_speedup=floods_report.replay_speedup_factor,
+        hot_read_p95=shirur_report.hot_p95_read_ms,
+        hot_write_p95=shirur_report.hot_p95_write_ms,
+    )
+
+    path.write_text(content, encoding="utf-8")
+    return str(path.resolve())
+
+
 def main() -> None:
-    """CLI entry point for running evaluation suite and demo."""
+    """CLI entry point for running evaluation suite, demo, and benchmark generation."""
     run_evaluation_demo()
+    report_path = generate_multimodal_benchmark_report()
+    print(f"\n[OK] Phase 1 Multimodal Benchmark Report written to:\n  {report_path}")
 
 
 if __name__ == "__main__":

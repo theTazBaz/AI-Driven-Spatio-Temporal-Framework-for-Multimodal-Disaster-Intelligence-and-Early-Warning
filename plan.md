@@ -1151,6 +1151,22 @@ supports both:
 
 >   - `slope_shear_risk = slope_deg * gsi_susceptibility_index`
 
+> **As built (Increment 18):**
+> Extended `src/disaster_intel/state/spec.py` with `FeatureSpec.v3()` establishing the unified 86-dimensional
+> state vector: 45 dynamic features (5 baseline + 2 Sentinel-1 SAR + 2 ISRO INSAT-3D/3DR across 5 rolling windows
+> [1h, 6h, 24h, 72h, 7d]), 5 static features (Copernicus DEM elevation, slope, WorldPop, GSI landslide
+> susceptibility index, GSI lithology cohesion), 34 multimodal foundation embedding features (32 PCA float16
+> dimensions, age, coverage), and 2 compound derived features (`compound_saturation = soil_moisture_rootzone__24h * precipitation__72h`
+> and `slope_shear_risk = slope_deg * gsi_susceptibility_index`). Exported in `src/disaster_intel/state/__init__.py`.
+> 16 unit tests in `tests/test_state_spec_v3.py` verify 86-dim layout, unique names, full definitions, fingerprint
+> determinism, `SpecMismatchError` on cross-spec loading (v1, v2, v3, truncated), compound interaction logic, strict
+> JSON NaN serialization, StateAssembler full multimodal assembly, dual-tier agreement (`hot == cold`), deterministic
+> historical rollback, and empirical multi-sensor historical replays across both certified disaster spells
+> (July 2024 Shirur landslide and July 2021 Uttara Kannada floods). Head-to-head empirical comparison verifies Clay
+> preserves >0.60 cosine similarity and 100% finite embeddings under complete monsoon cloud blindness where optical
+> Prithvi is blinded. Updated `src/disaster_intel/evaluation.py` to generate `PHASE1_MULTIMODAL_BENCHMARK.md`.
+> Verified with `pytest -m unit` (370 passed).
+
 
 
 ---
