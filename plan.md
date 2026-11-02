@@ -1010,6 +1010,15 @@ supports both:
 
 > threshold on VH cross-polarization provides an established, robust baseline for automated water extraction.
 
+> **As built (Increment 14):**
+> `src/disaster_intel/adapters/sentinel1.py` implements `Sentinel1Adapter(SourceAdapter)` with bit-exact
+> radiometric calibration ($\sigma^0 = 10 \log_{10}(\text{amp}^2) = 20 \log_{10}(\text{amp})$), specular
+> water classification ($\sigma^0_{\text{VH}} \le -18.0\text{ dB}$), and H3 Res-7 spatial pooling emitting
+> `sar_water_fraction` and `sar_vh_backscatter_db` `RawReading`s. Registered variables in `VariableCatalog.default()`
+> and `convert_unit()`. 16 unit tests in `tests/test_sentinel1_adapter.py` verify mathematical calibration,
+> threshold boundaries, cell pooling, error attribution, golden fixture replay (`tests/fixtures/sentinel1_sample.json`),
+> and full pipeline integration. Verified with `pytest -m unit` (317 passed).
+
 
 
 ---
