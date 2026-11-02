@@ -77,6 +77,24 @@ The framework operates as a layered, unidirectional data processing pipeline des
                                └── Compound Interaction Features (e.g. soil_moist * precip)
 ```
 
+### 2.1. Comprehensive Data Sources & Telemetry Catalog
+
+The framework ingests from 11 distinct, non-redundant data feeds across space, atmospheric, geological, and civil protection domains:
+
+| Data Source | Agency / Provider | Modality & Physics | Native Resolution | Update Cadence | Extracted Variables / Features | Non-Redundant Role (Disaster Intelligence) |
+|:---|:---|:---|:---|:---:|:---|:---|
+| **Open-Meteo Weather** | ECMWF / DWD / Open-Meteo | Numerical Weather Prediction (NWP) | 0.1° (~10 km) grid | Hourly | `precipitation` (mm), `temperature` (°C), `wind_speed`, `surface_pressure` | **Atmospheric forcing:** Ingests ongoing rainfall volume and storm intensity. |
+| **Open-Meteo Hydrology** | ERA5-Land / GloFAS | Land Surface & Hydrological Model | 0.1° (~10 km) grid | Hourly | `soil_moisture_surface` (0-7 cm), `soil_moisture_rootzone` (7-28 cm), `discharge` (m³/s) | **Ground saturation:** Identifies antecedent soil water loading before slope failure or river overflows. |
+| **USGS Earthquake API** | US Geological Survey | Real-Time Seismology Network | Point hypocenter | Event-driven | `seismic_magnitude` ($M_w$), hypocenter depth, event timestamp | **Ground motion shock:** Detects co-seismic shaking that destabilizes rain-soaked hillslopes. |
+| **GDACS Multi-Hazard** | UN / European Commission | Global Disaster Alert Aggregator | Global vector polygon | Event-driven (near real-time) | Multi-hazard alert score, hazard boundary, severity level | **Macro-impact bounds:** Provides regional multi-hazard impact extent across coastal basins. |
+| **SACHET / NDMA** | National Disaster Management Authority (India) | OASIS Common Alerting Protocol (CAP XML) | District / Coordinate vector polygon | Event-driven (real-time) | Civil warning severity (`Severe`, `Extreme`), disaster category, advisory text | **Official civil directives:** Ground-truth government evacuation directives and red/orange alerts. |
+| **Sentinel-2 MSI** | ESA / Copernicus Programme | Multispectral Optical Satellite | 10–20 m spatial | 5-day revisit (cloud-permitting) | 6 surface reflectance bands (B2, B3, B4, B8A, B11, B12), 32-dim PCA embeddings | **Landscape state:** Pre-monsoon forest cover, deforestation, bare soil scars, road-cut excavation. |
+| **Sentinel-1 C-SAR** | ESA / Copernicus Programme | Active 5.4 GHz C-band Synthetic Aperture Radar | 10–20 m spatial | 6–12 day pass (day/night, all-weather) | `sar_water_fraction`, `sar_vh_backscatter_db` ($\le -18\text{ dB}$ specular reflection) | **All-weather flood map:** Cloud-penetrating direct mapping of standing floodwater during storms. |
+| **ISRO INSAT-3D/3DR** | ISRO / MOSDAC | Geostationary Rapid-Scan Meteorological Satellite | ~4 km spatial | 15-minute rapid scan | `insat_cloud_top_tb` (TIR-1 ~10.8 µm), `insat_convective_cooling_rate` ($\Delta T_B / \Delta t$) | **Pre-storm nowcasting:** Flags explosive cumulonimbus updrafts 15–60 min before rain reaches rain gauges. |
+| **Copernicus DEM** | ESA / Airbus | Spaceborne InSAR Digital Elevation Model | 30m / 90m raster | Static baseline | `elevation_m` (altitude), `slope_deg` (plane fit across 6 hex neighbors) | **Topographic potential:** Quantifies gravitational pull driving landslide slip and flood runoff velocity. |
+| **GSI NLSM & Lithology** | Geological Survey of India | 1:50,000 Field Survey Mapping | 1:50,000 vector polygons | Static baseline | `gsi_susceptibility_index` [0.0, 1.0], `gsi_lithology_cohesion` [0.0, 1.0] | **Mechanical shear resistance:** Distinguishes stable bedrock from fragile weathered laterite that easily liquefies. |
+| **WorldPop / GHSL** | WorldPop / European JRC | Disaggregated Census & Settlement Grids | 100 m raster | Static (annual) | `population_density_km2` | **Human exposure:** Quantifies population count per hex cell for vulnerability-weighted early warning. |
+
 ---
 
 ## 3. Core Methodologies & Design Decisions
