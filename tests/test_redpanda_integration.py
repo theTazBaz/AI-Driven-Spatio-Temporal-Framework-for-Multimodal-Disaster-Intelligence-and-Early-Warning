@@ -52,20 +52,22 @@ class TestRealRedpandaContract(BaseBusContractTests):
     """Verify that real containerized Redpanda satisfies the Bus contract."""
 
     def create_bus(self, max_queue_size: int | None = None) -> Bus:
-        client_id = f"test_client_{uuid.uuid4().hex[:8]}"
+        test_id = uuid.uuid4().hex[:8]
         return RedpandaBus(
             bootstrap_servers=f"{REDPANDA_HOST}:{REDPANDA_PORT}",
-            client_id=client_id,
+            client_id=f"test_client_{test_id}",
             max_queue_size=max_queue_size,
+            topic_prefix=f"t_{test_id}_",
             test_mode=False,
         )
 
 
 def test_real_redpanda_pipeline_replay() -> None:
-    client_id = f"pipeline_client_{uuid.uuid4().hex[:8]}"
+    test_id = uuid.uuid4().hex[:8]
     bus = RedpandaBus(
         bootstrap_servers=f"{REDPANDA_HOST}:{REDPANDA_PORT}",
-        client_id=client_id,
+        client_id=f"pipeline_client_{test_id}",
+        topic_prefix=f"t_pipe_{test_id}_",
         test_mode=False,
     )
     sink = InMemorySink()

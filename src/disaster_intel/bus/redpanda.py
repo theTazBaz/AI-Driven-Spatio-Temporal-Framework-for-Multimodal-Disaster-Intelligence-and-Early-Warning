@@ -274,14 +274,17 @@ class RealKafkaTransport:
         self,
         bootstrap_servers: str | list[str] = "localhost:9092",
         client_id: str = "disaster_intel_bus",
+        max_queue_size: int | None = None,
     ) -> None:
         from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
         from kafka.admin import NewTopic
 
         self.bootstrap_servers = bootstrap_servers
         self.client_id = client_id
+        self.max_queue_size = max_queue_size
         self._producer: KafkaProducer | None = None
         self._consumers: dict[tuple[str, str], KafkaConsumer] = {}
+        self._topic_counts: dict[str, int] = defaultdict(int)
         self._lock = threading.RLock()
         self._KafkaAdminClient = KafkaAdminClient
         self._KafkaConsumer = KafkaConsumer
@@ -341,6 +344,13 @@ class RealKafkaTransport:
         headers: list[tuple[str, bytes]],
         timestamp_ms: int,
     ) -> int:
+        with self._lock:
+            if self.max_queue_size is not None:
+                if self._topic_counts[topic] >= self.max_queue_size:
+                    raise BufferFullError(
+                        f"Topic '{topic}' buffer is full: capacity is {self.max_queue_size}"
+                    )
+                self._topic_counts[topic] += 1
         producer = self._get_producer()
         future = producer.send(
             topic=topic,
@@ -359,23 +369,48 @@ class RealKafkaTransport:
         max_messages: int,
         auto_commit: bool,
     ) -> list[KafkaRecord]:
+        import time
+
         with self._lock:
             consumer = self._get_consumer(topic, group_id, auto_commit)
-            records_dict = consumer.poll(timeout_ms=500, max_records=max_messages)
             records: list[KafkaRecord] = []
-            for tp, tp_records in records_dict.items():
-                if tp.topic == topic:
-                    for r in tp_records:
-                        records.append(
-                            KafkaRecord(
-                                topic=r.topic,
-                                key=r.key or b"",
-                                value=r.value or b"",
-                                offset=r.offset,
-                                timestamp_ms=r.timestamp,
-                                headers=[(k, v) for k, v in (r.headers or [])],
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline:
+                needed = max_messages - len(records)
+                if needed <= 0:
+                    break
+                records_dict = consumer.poll(timeout_ms=250, max_records=needed)
+                for tp, tp_records in records_dict.items():
+                    if tp.topic == topic:
+                        for r in tp_records:
+                            records.append(
+                                KafkaRecord(
+                                    topic=r.topic,
+                                    key=r.key or b"",
+                                    value=r.value or b"",
+                                    offset=r.offset,
+                                    timestamp_ms=r.timestamp,
+                                    headers=[(k, v) for k, v in (r.headers or [])],
+                                )
                             )
-                        )
+                if records:
+                    break
+                assignment = consumer.assignment()
+                if assignment:
+                    try:
+                        end_offsets = consumer.end_offsets(list(assignment))
+                        all_caught_up = True
+                        for tp in assignment:
+                            if tp.topic == topic:
+                                pos = consumer.position(tp)
+                                end = end_offsets.get(tp, 0)
+                                if pos < end:
+                                    all_caught_up = False
+                                    break
+                        if all_caught_up:
+                            break
+                    except Exception:
+                        pass
             return records
 
     def commit(
@@ -407,6 +442,8 @@ class RealKafkaTransport:
             from kafka import TopicPartition
 
             tp = TopicPartition(topic, 0)
+            if tp not in consumer.assignment():
+                consumer.poll(timeout_ms=500)
             consumer.seek(tp, offset)
 
     def get_offset(
@@ -454,6 +491,7 @@ class RedpandaBus(Bus):
         max_queue_size: int | None = None,
         test_mode: bool = False,
         transport: KafkaTransport | None = None,
+        topic_prefix: str = "",
     ) -> None:
         if not (MIN_RETENTION_HOURS <= retention_hours <= MAX_RETENTION_HOURS):
             raise ValueError(
@@ -464,6 +502,7 @@ class RedpandaBus(Bus):
         self.retention_hours = retention_hours
         self.retention_ms = retention_hours * 3600 * 1000
         self.max_queue_size = max_queue_size
+        self.topic_prefix = topic_prefix
 
         if transport is not None:
             self._transport = transport
@@ -473,7 +512,16 @@ class RedpandaBus(Bus):
             self._transport = RealKafkaTransport(
                 bootstrap_servers=bootstrap_servers,
                 client_id=client_id,
+                max_queue_size=max_queue_size,
             )
+
+    def _resolve_topic(self, topic: str) -> str:
+        return f"{self.topic_prefix}{topic}" if self.topic_prefix else topic
+
+    def _unresolve_topic(self, topic: str) -> str:
+        if self.topic_prefix and topic.startswith(self.topic_prefix):
+            return topic[len(self.topic_prefix) :]
+        return topic
 
     def publish(
         self,
@@ -487,9 +535,10 @@ class RedpandaBus(Bus):
         kafka_headers = [(k, v.encode("utf-8")) for k, v in final_headers.items()]
         now_ms = int(datetime.now(UTC).timestamp() * 1000)
 
-        self._transport.ensure_topic(topic, self.retention_ms)
+        full_topic = self._resolve_topic(topic)
+        self._transport.ensure_topic(full_topic, self.retention_ms)
         return self._transport.send(
-            topic=topic,
+            topic=full_topic,
             key=key_bytes,
             value=value_bytes,
             headers=kafka_headers,
@@ -516,8 +565,9 @@ class RedpandaBus(Bus):
         max_messages: int = 100,
         auto_commit: bool = True,
     ) -> list[Message]:
+        full_topic = self._resolve_topic(topic)
         records = self._transport.poll(
-            topic=topic,
+            topic=full_topic,
             group_id=group_id,
             max_messages=max_messages,
             auto_commit=auto_commit,
@@ -531,7 +581,7 @@ class RedpandaBus(Bus):
             payload = deserialize_payload(r.value, headers_dict)
             ts = datetime.fromtimestamp(r.timestamp_ms / 1000.0, tz=UTC)
             msg = Message(
-                topic=r.topic,
+                topic=self._unresolve_topic(r.topic),
                 key=r.key.decode("utf-8") if isinstance(r.key, bytes) else str(r.key),
                 payload=payload,
                 offset=r.offset,
@@ -548,7 +598,7 @@ class RedpandaBus(Bus):
         group_id: str,
         offset: int | None = None,
     ) -> None:
-        self._transport.commit(topic=topic, group_id=group_id, offset=offset)
+        self._transport.commit(topic=self._resolve_topic(topic), group_id=group_id, offset=offset)
 
     def seek(
         self,
@@ -556,14 +606,14 @@ class RedpandaBus(Bus):
         group_id: str,
         offset: int,
     ) -> None:
-        self._transport.seek(topic=topic, group_id=group_id, offset=offset)
+        self._transport.seek(topic=self._resolve_topic(topic), group_id=group_id, offset=offset)
 
     def get_offset(
         self,
         topic: str,
         group_id: str,
     ) -> int:
-        return self._transport.get_offset(topic=topic, group_id=group_id)
+        return self._transport.get_offset(topic=self._resolve_topic(topic), group_id=group_id)
 
     def close(self) -> None:
         self._transport.close()
