@@ -1097,6 +1097,18 @@ supports both:
 
 | **Done when** | Static feature loader loads GSI features alongside Copernicus DEM and WorldPop; state vector assembler appends `gsi_susceptibility_index` and `gsi_lithology_cohesion` to static block. |
 
+> **As built (Increment 17):**
+> Extended `src/disaster_intel/state/static_layers.py` with `StaticFeatures.gsi_susceptibility_index`
+> and `StaticFeatures.gsi_lithology_cohesion`. Implemented `map_gsi_susceptibility` (Low: 0.1, Med: 0.4,
+> High: 0.7, Very High: 1.0) and `map_gsi_lithology` (laterite: 0.2, schist/phyllite: 0.4,
+> charnockite/quartzite: 0.7, granite/basalt: 0.9, alluvium/sand: 0.1). Created `GeologySource` protocol,
+> `GSIGeologySource` (Western Ghats gradient: coastal laterite belt -> high-susceptibility escarpment schist
+> -> competent plateau granite/charnockite), and `MapGeologySource`. Updated `StaticLayers.save` and `load`
+> with 5-field serialization and seamless backward compatibility for legacy 3-field files. Updated
+> `build_static_layers` and CLI `--geology`. 11 unit tests in `tests/test_gsi_geology.py` verify mapping,
+> boundary validations, spatial attribution, file serialization/round-trip, timestamp immutability, and
+> `StateAssembler` static block integration. Verified with `pytest -m unit` (354 passed).
+
 
 
 ---

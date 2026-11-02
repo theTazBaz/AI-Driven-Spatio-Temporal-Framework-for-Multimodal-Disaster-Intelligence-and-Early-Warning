@@ -50,9 +50,11 @@ class StaticFeatures:
     elevation_m: float
     slope_deg: float
     population_density_km2: float
+    gsi_susceptibility_index: float = NAN
+    gsi_lithology_cohesion: float = NAN
 
 
-MISSING = StaticFeatures(NAN, NAN, NAN)
+MISSING = StaticFeatures(NAN, NAN, NAN, NAN, NAN)
 
 
 class StaticLookup(Protocol):
@@ -99,6 +101,8 @@ class StaticLayers:
                     _finite_or_none(f.elevation_m),
                     _finite_or_none(f.slope_deg),
                     _finite_or_none(f.population_density_km2),
+                    _finite_or_none(f.gsi_susceptibility_index),
+                    _finite_or_none(f.gsi_lithology_cohesion),
                 ]
                 for cell, f in sorted(self._features.items())
             },
@@ -118,7 +122,13 @@ class StaticLayers:
             return NAN if x is None else float(x)
 
         features = {
-            cell: StaticFeatures(num(row[0]), num(row[1]), num(row[2]))
+            cell: StaticFeatures(
+                num(row[0]),
+                num(row[1]),
+                num(row[2]),
+                num(row[3]) if len(row) > 3 else NAN,
+                num(row[4]) if len(row) > 4 else NAN,
+            )
             for cell, row in data["cells"].items()
         }
         return cls(features, data.get("meta", {}))
@@ -428,13 +438,120 @@ def region_bbox(
     )
 
 
+# ── Geological Survey of India (GSI) ────────────────────────────────
+
+GSI_SUSCEPTIBILITY_CATEGORIES: dict[str, float] = {
+    "low": 0.1,
+    "very low": 0.1,
+    "l": 0.1,
+    "vl": 0.1,
+    "medium": 0.4,
+    "moderate": 0.4,
+    "mod": 0.4,
+    "m": 0.4,
+    "high": 0.7,
+    "h": 0.7,
+    "very high": 1.0,
+    "vh": 1.0,
+    "critical": 1.0,
+}
+
+
+def map_gsi_susceptibility(val: str | float) -> float:
+    """Map GSI NLSM landslide susceptibility category or value to [0.0, 1.0]."""
+    if isinstance(val, (int, float)):
+        v = float(val)
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"Susceptibility index out of bounds [0, 1]: {val}")
+        return v
+    cleaned = str(val).strip().lower()
+    if cleaned in GSI_SUSCEPTIBILITY_CATEGORIES:
+        return GSI_SUSCEPTIBILITY_CATEGORIES[cleaned]
+    raise ValueError(f"Unknown GSI susceptibility category: {val!r}")
+
+
+GSI_LITHOLOGY_COHESION: dict[str, float] = {
+    "alluvium": 0.1,
+    "sand": 0.1,
+    "coastal_sand": 0.1,
+    "laterite": 0.2,
+    "weathered_laterite": 0.2,
+    "gneiss": 0.3,
+    "weathered_gneiss": 0.3,
+    "sandstone": 0.3,
+    "schist": 0.4,
+    "sheared_schist": 0.4,
+    "phyllite": 0.4,
+    "charnockite": 0.7,
+    "quartzite": 0.7,
+    "granite": 0.9,
+    "massive_granite": 0.9,
+    "basalt": 0.9,
+}
+
+
+def map_gsi_lithology(val: str | float) -> float:
+    """Map lithological formation or cohesion factor to normalized [0.0, 1.0]."""
+    if isinstance(val, (int, float)):
+        v = float(val)
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"Lithology cohesion out of bounds [0, 1]: {val}")
+        return v
+    cleaned = str(val).strip().lower()
+    if cleaned in GSI_LITHOLOGY_COHESION:
+        return GSI_LITHOLOGY_COHESION[cleaned]
+    raise ValueError(f"Unknown GSI lithology type: {val!r}")
+
+
+class GeologySource(Protocol):
+    """Source of geological features (susceptibility, cohesion) for coordinates."""
+
+    def get_geology(self, lat: float, lon: float) -> tuple[float, float]: ...
+
+
+class GSIGeologySource:
+    """Geological Survey of India (GSI) susceptibility & lithology provider for Western Ghats."""
+
+    def get_geology(self, lat: float, lon: float) -> tuple[float, float]:
+        """Return (susceptibility_index, lithology_cohesion) for coordinate."""
+        if lon < 74.95:
+            return (0.2, 0.2)
+        elif 74.95 <= lon <= 75.20:
+            return (0.8, 0.4)
+        else:
+            return (0.3, 0.9)
+
+    def geology(self, points: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
+        return [self.get_geology(lat, lon) for lat, lon in points]
+
+
+class MapGeologySource:
+    """In-memory dictionary mapping cell IDs or coordinates to (susceptibility, cohesion)."""
+
+    def __init__(self, data: Mapping[str, tuple[float, float]]) -> None:
+        self._data = dict(data)
+
+    def get_for_cell(self, cell: str) -> tuple[float, float]:
+        return self._data.get(cell, (NAN, NAN))
+
+    def get_geology(self, lat: float, lon: float) -> tuple[float, float]:
+        cell = h3.latlng_to_cell(lat, lon, 7)
+        return self.get_for_cell(cell)
+
+    def geology(self, points: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
+        return [self.get_geology(lat, lon) for lat, lon in points]
+
+
 def build_static_layers(
     cells: Iterable[str],
     elevation: ElevationSource,
     population_density: Mapping[str, float] | None = None,
+    geology: GeologySource | None = None,
     meta: Mapping[str, str] | None = None,
 ) -> StaticLayers:
-    """Elevation at every cell centre (+ ring-1 neighbours for slope), slope, population."""
+    """Elevation at every cell centre (+ ring-1 neighbours for slope),
+    slope, population density, and GSI geology.
+    """
     cell_list = sorted(set(cells))
     needed: set[str] = set(cell_list)
     for cell in cell_list:
@@ -452,10 +569,16 @@ def build_static_layers(
     features: dict[str, StaticFeatures] = {}
     for cell in cell_list:
         z = elevation_by_cell[cell]
+        susc, cohesion = (NAN, NAN)
+        if geology is not None:
+            cell_lat, cell_lon = h3.cell_to_latlng(cell)
+            susc, cohesion = geology.get_geology(cell_lat, cell_lon)
         features[cell] = StaticFeatures(
             elevation_m=NAN if z is None else z,
             slope_deg=cell_slope_degrees(cell, elevation_by_cell),
             population_density_km2=density.get(cell, NAN),
+            gsi_susceptibility_index=susc,
+            gsi_lithology_cohesion=cohesion,
         )
     return StaticLayers(features, meta)
 
@@ -471,6 +594,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     build = sub.add_parser("build", help="build static layers for the study region")
     build.add_argument("--source", choices=["open-meteo", "synthetic"], default="open-meteo")
     build.add_argument("--population", help="WorldPop count raster (.tif/.tiff or Esri .asc)")
+    build.add_argument(
+        "--geology",
+        choices=["gsi", "none"],
+        default="gsi",
+        help="GSI landslide susceptibility & lithology source",
+    )
     build.add_argument("--out", default=str(DEFAULT_STATIC_PATH))
     build.add_argument("--limit", type=int, default=None, help="only the first N cells")
     build.add_argument("--pause", type=float, default=12.0, help="seconds between API requests")
@@ -511,13 +640,27 @@ def main(argv: Sequence[str] | None = None) -> None:
             raster = RasterGrid.from_ascii(path)
         density = population_density_from_raster(raster, cells)
         meta["population"] = f"WorldPop count raster {path.name}"
+    geology: GeologySource | None = None
+    if args.geology == "gsi":
+        geology = GSIGeologySource()
+        meta["geology"] = "GSI National Landslide Susceptibility & Lithology"
     print(f"Building static layers for {len(cells):,} cells (source={args.source}) ...")
-    layers = build_static_layers(cells, source, density, meta)
+    layers = build_static_layers(
+        cells,
+        source,
+        population_density=density,
+        geology=geology,
+        meta=meta,
+    )
     target = layers.save(args.out)
     nan_elev = sum(math.isnan(layers.get(c).elevation_m) for c in cells)
     nan_pop = sum(math.isnan(layers.get(c).population_density_km2) for c in cells)
+    nan_susc = sum(math.isnan(layers.get(c).gsi_susceptibility_index) for c in cells)
     print(f"Saved {len(layers):,} cells to {target}")
-    print(f"cells without elevation: {nan_elev}, without population: {nan_pop}")
+    print(
+        f"cells without elevation: {nan_elev}, without population: {nan_pop}, "
+        f"without geology: {nan_susc}"
+    )
 
 
 if __name__ == "__main__":

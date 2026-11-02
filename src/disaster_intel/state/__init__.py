@@ -1,4 +1,4 @@
-"""Increment 10 - state vector assembler and static geographic layers (Objective 2)."""
+"""Increment 10 & 17 — state vector assembler, static geographic and geological layers."""
 
 from disaster_intel.state.assembler import (
     ImageryLookup,
@@ -19,6 +19,9 @@ from disaster_intel.state.static_layers import (
     DEFAULT_STATIC_PATH,
     ElevationSource,
     FunctionElevation,
+    GeologySource,
+    GSIGeologySource,
+    MapGeologySource,
     OpenMeteoElevation,
     RasterElevation,
     RasterGrid,
@@ -27,6 +30,8 @@ from disaster_intel.state.static_layers import (
     StaticLookup,
     build_static_layers,
     cell_slope_degrees,
+    map_gsi_lithology,
+    map_gsi_susceptibility,
     plane_slope_degrees,
     population_density_from_raster,
     synthetic_ghats_elevation,
@@ -40,7 +45,10 @@ __all__ = [
     "ElevationSource",
     "FeatureSpec",
     "FunctionElevation",
+    "GSIGeologySource",
+    "GeologySource",
     "ImageryLookup",
+    "MapGeologySource",
     "OpenMeteoElevation",
     "RasterElevation",
     "RasterGrid",
@@ -55,6 +63,8 @@ __all__ = [
     "build_static_layers",
     "cell_slope_degrees",
     "feature_name",
+    "map_gsi_lithology",
+    "map_gsi_susceptibility",
     "plane_slope_degrees",
     "population_density_from_raster",
     "synthetic_ghats_elevation",
