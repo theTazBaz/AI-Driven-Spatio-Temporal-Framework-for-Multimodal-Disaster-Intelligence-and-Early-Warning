@@ -430,6 +430,7 @@ class RealKafkaTransport:
 
                     tp = TopicPartition(topic, 0)
                     consumer.commit({tp: OffsetAndMetadata(offset + 1, "")})
+                    consumer.seek(tp, offset + 1)
 
     def seek(
         self,
