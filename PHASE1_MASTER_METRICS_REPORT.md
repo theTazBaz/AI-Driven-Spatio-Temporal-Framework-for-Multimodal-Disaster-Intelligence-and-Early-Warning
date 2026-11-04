@@ -181,3 +181,4 @@ Both databases are running live inside your Docker containers:
   - `demo_out/open_meteo_payload.json`: The cached $7,488$ raw weather readings downloaded from Open-Meteo for the July 2024 Shirur landslide disaster.
   - `demo_out/showcase_metrics.json`: Exported performance and latency measurements.
   - `demo_out/showcase_map.html`: Interactive visualization map with embedded scorecard.
+
