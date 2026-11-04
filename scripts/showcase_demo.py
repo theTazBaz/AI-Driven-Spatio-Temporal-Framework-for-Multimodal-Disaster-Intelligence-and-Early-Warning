@@ -231,13 +231,19 @@ def main() -> None:  # noqa: C901, PLR0915
     database = f"showcase_{uuid.uuid4().hex[:8]}"
     try:
         hot = HotStore.connect(clock=clock, prefix=f"showcase:{uuid.uuid4().hex[:8]}:")
+        print("  [LIVE HOT TIER] Connected to REAL Redis on localhost:6379")
+    except Exception as e:
+        print(f"  [INFO] Redis daemon not detected ({type(e).__name__}), falling back to FakeRedis.")
+        hot = HotStore(FakeRedis(), clock=clock, prefix=f"showcase:{uuid.uuid4().hex[:8]}:")
+
+    try:
         cold = ColdStore.connect(database=database)
         cold.migrate()
+        print(f"  [LIVE COLD TIER] Connected to real ClickHouse database: {database}")
     except Exception as e:
         using_mock = True
-        print(f"  [INFO] Docker services not detected on localhost ({type(e).__name__}).")
-        print("  [INFO] Running with high-fidelity In-Memory Dual-Tier Storage (FakeRedis + OracleCold).")
-        hot = HotStore(FakeRedis(), clock=clock, prefix=f"showcase:{uuid.uuid4().hex[:8]}:")
+        print(f"  [INFO] ClickHouse container not detected on localhost:8123 ({type(e).__name__}).")
+        print("  [INFO] Cold Store running with high-fidelity In-Memory Stand-in.")
         cold = InMemoryColdStore()
         cold.migrate()
     spec = FeatureSpec.v1()
