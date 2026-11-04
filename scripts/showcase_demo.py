@@ -41,8 +41,95 @@ from disaster_intel.state import (
     build_static_layers,
     synthetic_ghats_elevation,
 )
-from disaster_intel.storage import ColdStore, HotStore, TeeSink, rebuild_hot_from_cold
-from disaster_intel.windows import HOUR
+from disaster_intel.storage import (
+    ColdStore,
+    HotStore,
+    TeeSink,
+    rebuild_hot_from_cold,
+    to_float32,
+)
+from disaster_intel.windows import HOUR, WindowValue
+
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tests"))
+from fake_redis import FakeRedis
+
+
+class InMemoryColdStore:
+    """In-memory stand-in for ColdStore when Docker containers are not running."""
+
+    name: str = "clickhouse_cold_store"
+
+    def __init__(self, catalog: object | None = None) -> None:
+        from disaster_intel.models import VariableCatalog
+
+        self.catalog = catalog or VariableCatalog.default()
+        self.observations: list[Observation] = []
+        self.client = type("Client", (), {"command": lambda *a, **kw: None})()
+
+    def migrate(self) -> None:
+        pass
+
+    def write(self, observations: list[Observation]) -> tuple[int, int]:
+        stored = 0
+        duplicates = 0
+        seen = {(o.cell, o.variable, o.source, o.timestamp) for o in self.observations}
+        for o in observations:
+            key = (o.cell, o.variable, o.source, o.timestamp)
+            if key in seen:
+                duplicates += 1
+            else:
+                seen.add(key)
+                stored += 1
+                self.observations.append(
+                    Observation(
+                        cell=o.cell,
+                        source=o.source,
+                        variable=o.variable,
+                        value=to_float32(o.value),
+                        unit=o.unit,
+                        timestamp=o.timestamp,
+                        idempotency_key=o.idempotency_key,
+                    )
+                )
+        return stored, duplicates
+
+    def count(self) -> int:
+        return len(self.observations)
+
+    def windows(
+        self,
+        cell: str,
+        as_of: datetime,
+        source: str | None = None,
+        window_hours: dict[str, int] | None = None,
+    ) -> dict[str, dict[str, WindowValue]]:
+        from disaster_intel.windows import reference_windows
+
+        return reference_windows(
+            self.observations, cell, as_of, self.catalog, window_hours=window_hours, source=source
+        )
+
+    def read_cell(
+        self,
+        cell: str,
+        variable: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> list[Observation]:
+        res = []
+        for o in self.observations:
+            if o.cell != cell:
+                continue
+            if variable is not None and o.variable != variable:
+                continue
+            if start is not None and o.timestamp < start:
+                continue
+            if end is not None and o.timestamp > end:
+                continue
+            res.append(o)
+        return res
+
 
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 OUT = Path("demo_out")
@@ -140,10 +227,19 @@ def main() -> None:  # noqa: C901, PLR0915
     start_dt = datetime.fromisoformat(args.start).replace(tzinfo=UTC)
     end_dt = datetime.fromisoformat(args.end).replace(tzinfo=UTC) + timedelta(hours=24)
     clock = FakeClock(start_dt)
-    hot = HotStore.connect(clock=clock, prefix=f"showcase:{uuid.uuid4().hex[:8]}:")
+    using_mock = False
     database = f"showcase_{uuid.uuid4().hex[:8]}"
-    cold = ColdStore.connect(database=database)
-    cold.migrate()
+    try:
+        hot = HotStore.connect(clock=clock, prefix=f"showcase:{uuid.uuid4().hex[:8]}:")
+        cold = ColdStore.connect(database=database)
+        cold.migrate()
+    except Exception as e:
+        using_mock = True
+        print(f"  [INFO] Docker services not detected on localhost ({type(e).__name__}).")
+        print("  [INFO] Running with high-fidelity In-Memory Dual-Tier Storage (FakeRedis + OracleCold).")
+        hot = HotStore(FakeRedis(), clock=clock, prefix=f"showcase:{uuid.uuid4().hex[:8]}:")
+        cold = InMemoryColdStore()
+        cold.migrate()
     spec = FeatureSpec.v1()
     layers = build_static_layers(region, FunctionElevation(synthetic_ghats_elevation))
     assembler = StateAssembler(layers, hot=hot, cold=cold, clock=clock)
@@ -295,9 +391,11 @@ def main() -> None:  # noqa: C901, PLR0915
     finally:
         if args.keep:
             print(f"\n  --keep: ClickHouse database = {database}   Redis prefix = {hot._prefix}")
-        else:
+        elif not using_mock:
             hot.clear()
             cold.client.command(f"DROP DATABASE IF EXISTS {database}")
+        else:
+            hot.clear()
 
 
 HTML = r"""<!doctype html><html><head><meta charset="utf-8"><title>WorldState - Shirur 2024</title>
