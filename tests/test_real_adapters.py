@@ -11,7 +11,7 @@ from disaster_intel.adapters.gdacs import GDACSAdapter, parse_gdacs_xml
 from disaster_intel.adapters.glofas import GloFASAdapter
 from disaster_intel.adapters.usgs import USGSAdapter
 from disaster_intel.discretizers import PolygonDiscretizer
-from disaster_intel.models import CAPSeverity, PolygonGeometry
+from disaster_intel.models import CAPSeverity, PointGeometry, PolygonGeometry
 
 
 @pytest.mark.unit
@@ -102,6 +102,7 @@ class TestUSGSAdapter:
         assert r0.variable == "seismic_magnitude"
         assert r0.value == pytest.approx(5.0)
         assert r0.unit == "Mw"
+        assert isinstance(r0.geometry, PointGeometry)
         assert r0.geometry.lat == pytest.approx(18.4471)
         assert r0.geometry.lon == pytest.approx(80.3296)
 
@@ -174,7 +175,9 @@ class TestGDACSAdapter:
         assert a0.event_type == "FL"
         assert a0.alert_level == "Green"
         assert a0.alert_score == pytest.approx(1.0)
-        assert a0.point == (pytest.approx(15.445), pytest.approx(80.166))
+        assert a0.point is not None
+        assert a0.point[0] == pytest.approx(15.445)
+        assert a0.point[1] == pytest.approx(80.166)
         assert a0.bbox == (76.166, 84.166, 11.445, 19.445)
 
         geom = a0.to_geometry()
