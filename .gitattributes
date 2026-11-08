@@ -1,0 +1,30 @@
+# Auto-normalize line endings to LF for all text files
+* text=auto eol=lf
+
+# Explicit text files
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.txt text eol=lf
+*.html text eol=lf
+Makefile text eol=lf
+
+# Binary files - must never have line endings modified
+*.npz binary
+*.tif binary
+*.tiff binary
+*.shp binary
+*.shx binary
+*.dbf binary
+*.sbn binary
+*.sbx binary
+*.cpg binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.rdb binary
+*.ico binary
