@@ -32,11 +32,9 @@ from disaster_intel.models import Observation, VariableCatalog
 from disaster_intel.pipeline import InMemorySink, calculate_percentiles
 from disaster_intel.state import (
     FeatureSpec,
-    FunctionElevation,
     StateAssembler,
     StateVector,
-    build_static_layers,
-    synthetic_ghats_elevation,
+    StaticLayers,
 )
 from disaster_intel.storage import FakeRedis, HotStore, to_float32
 from disaster_intel.windows import HOUR, WindowValue, reference_windows
@@ -397,7 +395,7 @@ class Phase1Evaluator:
                 )
 
         mock_cold = MockColdStore(test_obs)
-        static = build_static_layers([focal_cell], FunctionElevation(synthetic_ghats_elevation))
+        static = StaticLayers.load()
         assembler = StateAssembler(static, hot=hot, cold=mock_cold, clock=clock)
 
         cutoff = window.start + 24 * HOUR
@@ -487,7 +485,7 @@ def run_evaluation_demo(cell: str = SHIRUR_CELL) -> None:
             )
 
     cold = MemoryColdStore()
-    static = build_static_layers([cell], FunctionElevation(synthetic_ghats_elevation))
+    static = StaticLayers.load()
     assembler = StateAssembler(static, hot=hot, cold=cold, clock=clock)
 
     # Key moments to inspect:

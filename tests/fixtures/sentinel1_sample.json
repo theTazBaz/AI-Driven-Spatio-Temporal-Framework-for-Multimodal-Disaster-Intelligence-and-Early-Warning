@@ -1,6 +1,6 @@
 {
-  "scene_id": "S1A_IW_GRDH_1SDV_20240716T004500_20240716T004525_054790_06A1B2_7F89",
-  "timestamp": "2024-07-16T00:45:00Z",
+  "scene_id": "S1A_IW_GRDH_1SDV_20240713T004836_20240713T004901_054735_06AA12_F353.SAFE",
+  "timestamp": "2024-07-13T00:48:36Z",
   "sensor": "Sentinel-1A C-SAR",
   "mode": "IW",
   "product": "GRD",
@@ -10,71 +10,61 @@
       "lat": 12.9141,
       "lon": 74.8560,
       "vh_amplitude": 0.065,
-      "vv_amplitude": 0.120,
-      "description": "Gurupura river estuary / open water (-23.7 dB)"
+      "vv_amplitude": 0.120
     },
     {
       "lat": 12.9150,
       "lon": 74.8570,
       "vh_amplitude": 0.072,
-      "vv_amplitude": 0.135,
-      "description": "Flooded coastal plain / open water (-22.8 dB)"
+      "vv_amplitude": 0.135
     },
     {
       "lat": 12.9160,
       "lon": 74.8580,
       "vh_amplitude": 0.080,
-      "vv_amplitude": 0.150,
-      "description": "Standing flood water (-21.9 dB)"
+      "vv_amplitude": 0.150
     },
     {
       "lat": 12.9170,
       "lon": 74.8590,
       "vh_amplitude": 0.280,
-      "vv_amplitude": 0.420,
-      "description": "Mangalore urban / settled terrain (-11.0 dB)"
+      "vv_amplitude": 0.420
     },
     {
       "lat": 13.3408,
       "lon": 74.7421,
       "vh_amplitude": 0.055,
-      "vv_amplitude": 0.110,
-      "description": "Udupi coastal inlet / open water (-25.2 dB)"
+      "vv_amplitude": 0.110
     },
     {
       "lat": 13.3420,
       "lon": 74.7435,
       "vh_amplitude": 0.070,
-      "vv_amplitude": 0.130,
-      "description": "Inundated paddy field / water (-23.1 dB)"
+      "vv_amplitude": 0.130
     },
     {
       "lat": 13.3435,
       "lon": 74.7450,
       "vh_amplitude": 0.320,
-      "vv_amplitude": 0.480,
-      "description": "Udupi vegetated hillslope (-9.9 dB)"
+      "vv_amplitude": 0.480
     },
     {
       "lat": 14.8150,
       "lon": 74.1320,
       "vh_amplitude": 0.060,
-      "vv_amplitude": 0.115,
-      "description": "Karwar Kali river water (-24.4 dB)"
+      "vv_amplitude": 0.115
     },
     {
       "lat": 14.8165,
       "lon": 74.1340,
       "vh_amplitude": 0.075,
-      "vv_amplitude": 0.140,
-      "description": "Kali estuary water (-22.5 dB)"
+      "vv_amplitude": 0.140
     },
     {
       "lat": 14.8180,
       "lon": 74.1360,
       "vh_amplitude": 0.350,
-      "vv_amplitude": 0.510,
-      "description": "Western Ghats forested slope (-9.1 dB)"
+      "vv_amplitude": 0.510
     }
   ]
 }

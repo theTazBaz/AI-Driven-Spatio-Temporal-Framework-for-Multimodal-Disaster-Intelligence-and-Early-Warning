@@ -411,3 +411,46 @@ class TestCAPSeverity:
     def test_severity_from_string(self) -> None:
         assert CAPSeverity.from_str("Minor") == CAPSeverity.MINOR
         assert CAPSeverity.from_str("extreme") == CAPSeverity.EXTREME
+
+
+# ── Data Origin Provenance ──────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestDataOriginProvenance:
+    """Verify data origin tagging and schema provenance tracking."""
+
+    def test_inferred_data_origins(self) -> None:
+        from disaster_intel.models import infer_data_origin
+
+        assert infer_data_origin("open-meteo") == "REANALYSIS_ERA5"
+        assert infer_data_origin("sentinel-1") == "SATELLITE_SAR"
+        assert infer_data_origin("insat-3d") == "SATELLITE_INSAT"
+        assert infer_data_origin("glofas") == "HYDROLOGY_GLOFAS"
+        assert infer_data_origin("usgs") == "SEISMIC_USGS"
+        assert infer_data_origin("gdacs") == "CIVIL_ALERT_GDACS"
+        assert infer_data_origin("gsi") == "GROUND_TRUTH_GSI"
+        assert infer_data_origin("synthetic") == "SYNTHETIC_STRESS_BURST"
+        assert infer_data_origin("custom-station") == "REAL_IN_SITU"
+
+    def test_explicit_origin_override(self) -> None:
+        from disaster_intel.models import infer_data_origin
+
+        assert infer_data_origin("open-meteo", "CUSTOM_ORIGIN") == "CUSTOM_ORIGIN"
+
+    def test_observation_provenance_round_trip(self) -> None:
+        obs = Observation.from_raw(
+            cell="8760112eaffffff",
+            source="sentinel-1",
+            variable="sar_water_fraction",
+            raw_value=0.45,
+            raw_unit="fraction",
+            timestamp=datetime(2024, 7, 13, 0, 48, 0, tzinfo=UTC),
+        )
+        assert obs.data_origin == "SATELLITE_SAR"
+
+        d = obs.to_dict()
+        assert d["data_origin"] == "SATELLITE_SAR"
+
+        restored = Observation.from_dict(d)
+        assert restored.data_origin == "SATELLITE_SAR"

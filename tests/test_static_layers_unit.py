@@ -35,7 +35,6 @@ from disaster_intel.state import (
     cell_slope_degrees,
     plane_slope_degrees,
     population_density_from_raster,
-    synthetic_ghats_elevation,
 )
 from disaster_intel.state.static_layers import METRES_PER_DEGREE
 
@@ -187,10 +186,11 @@ def test_load_rejects_an_unknown_file_format(tmp_path: Path) -> None:
         StaticLayers.load(path)
 
 
-def test_synthetic_terrain_rises_inland() -> None:
-    assert synthetic_ghats_elevation(13.0, 74.4) == 0.0
-    assert synthetic_ghats_elevation(13.0, 75.8) == pytest.approx(1200.0)
-    assert synthetic_ghats_elevation(13.0, 75.1) < synthetic_ghats_elevation(13.0, 75.4)
+def test_cached_elevation_features() -> None:
+    """Verify static layer builds with elevation source."""
+    source = FunctionElevation(lambda lat, lon: 50.0 + (lon - 74.0) * 500.0)
+    layers = build_static_layers([CENTRE], source)
+    assert layers.get(CENTRE).elevation_m > 0.0
 
 
 # ── 4. Rasters and population density ────────────────────────────────

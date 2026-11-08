@@ -34,7 +34,6 @@ from disaster_intel.state import (
     StateAssembler,
     StaticLayers,
     build_static_layers,
-    synthetic_ghats_elevation,
 )
 from disaster_intel.storage import ColdStore, HotStore, TeeSink, rebuild_hot_from_cold
 from disaster_intel.windows import HOUR, variable_names
@@ -117,7 +116,7 @@ def random_series(cell: str, seed: int, end: datetime = END, days: int = 9) -> l
 
 
 def static_for(cells: list[str]) -> StaticLayers:
-    return build_static_layers(cells, FunctionElevation(synthetic_ghats_elevation))
+    return build_static_layers(cells, FunctionElevation(lambda lat, lon: 100.0))
 
 
 # ── 1. Hot == cold on the real stores ────────────────────────────────

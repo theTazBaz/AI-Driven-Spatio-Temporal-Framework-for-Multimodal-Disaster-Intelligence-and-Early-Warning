@@ -434,6 +434,42 @@ class RawReading:
 # ── Observation ─────────────────────────────────────────────────────
 
 
+DATA_ORIGIN_TYPES: tuple[str, ...] = (
+    "REAL_IN_SITU",
+    "REANALYSIS_ERA5",
+    "SATELLITE_SAR",
+    "SATELLITE_INSAT",
+    "HYDROLOGY_GLOFAS",
+    "SEISMIC_USGS",
+    "CIVIL_ALERT_GDACS",
+    "GROUND_TRUTH_GSI",
+    "SYNTHETIC_STRESS_BURST",
+)
+
+SOURCE_TO_DATA_ORIGIN: dict[str, str] = {
+    "open-meteo": "REANALYSIS_ERA5",
+    "era5": "REANALYSIS_ERA5",
+    "sentinel-1": "SATELLITE_SAR",
+    "insat-3d": "SATELLITE_INSAT",
+    "glofas": "HYDROLOGY_GLOFAS",
+    "usgs": "SEISMIC_USGS",
+    "gdacs": "CIVIL_ALERT_GDACS",
+    "gsi": "GROUND_TRUTH_GSI",
+    "synthetic": "SYNTHETIC_STRESS_BURST",
+}
+
+
+def infer_data_origin(source: str, explicit_origin: str | None = None) -> str:
+    """Infer the verified physical data provenance category from source or explicit origin."""
+    if explicit_origin:
+        return explicit_origin
+    s_lower = source.lower()
+    for prefix, origin in SOURCE_TO_DATA_ORIGIN.items():
+        if prefix in s_lower:
+            return origin
+    return "REAL_IN_SITU"
+
+
 def compute_idempotency_key(cell: str, variable: str, source: str, timestamp: datetime) -> str:
     """Deterministic key: hash of (cell, variable, source, UTC timestamp).
 
@@ -452,6 +488,7 @@ class Observation:
 
     __slots__ = (
         "cell",
+        "data_origin",
         "idempotency_key",
         "source",
         "timestamp",
@@ -470,6 +507,7 @@ class Observation:
         unit: str,
         timestamp: datetime,
         idempotency_key: str,
+        data_origin: str | None = None,
     ) -> None:
         self.cell = cell
         self.source = source
@@ -478,6 +516,7 @@ class Observation:
         self.unit = unit
         self.timestamp = timestamp
         self.idempotency_key = idempotency_key
+        self.data_origin = infer_data_origin(source, data_origin)
 
     @classmethod
     def from_reading(
@@ -485,6 +524,7 @@ class Observation:
         reading: RawReading,
         cell: str,
         interval_hours: float = 1.0,
+        data_origin: str | None = None,
     ) -> Observation:
         """Create an Observation directly from a RawReading and an H3 cell ID."""
         return cls.from_raw(
@@ -495,6 +535,7 @@ class Observation:
             raw_unit=reading.unit,
             timestamp=reading.timestamp,
             interval_hours=interval_hours,
+            data_origin=data_origin,
         )
 
     @classmethod
@@ -543,6 +584,7 @@ class Observation:
         converted_value, canonical_unit = convert_unit(val, unit_str, var, interval_hours)
 
         key = compute_idempotency_key(target_cell, var, src, ts_utc)
+        origin = kwargs.get("data_origin")
 
         return cls(
             cell=target_cell,
@@ -552,6 +594,7 @@ class Observation:
             unit=canonical_unit,
             timestamp=ts_utc,
             idempotency_key=key,
+            data_origin=origin,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -563,6 +606,7 @@ class Observation:
             "unit": self.unit,
             "timestamp": self.timestamp.isoformat(),
             "idempotency_key": self.idempotency_key,
+            "data_origin": self.data_origin,
         }
 
     def to_json(self) -> str:
@@ -578,6 +622,7 @@ class Observation:
             unit=d["unit"],
             timestamp=datetime.fromisoformat(d["timestamp"]),
             idempotency_key=d["idempotency_key"],
+            data_origin=d.get("data_origin"),
         )
 
     @classmethod

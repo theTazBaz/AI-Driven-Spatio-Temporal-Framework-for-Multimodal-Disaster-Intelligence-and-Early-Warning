@@ -36,10 +36,8 @@ from disaster_intel.grid import CoastalGrid
 from disaster_intel.models import Observation, RawReading
 from disaster_intel.state import (
     FeatureSpec,
-    FunctionElevation,
     StateAssembler,
-    build_static_layers,
-    synthetic_ghats_elevation,
+    StaticLayers,
 )
 from disaster_intel.storage import (
     ColdStore,
@@ -247,7 +245,7 @@ def main() -> None:  # noqa: C901, PLR0915
         cold = InMemoryColdStore()
         cold.migrate()
     spec = FeatureSpec.v1()
-    layers = build_static_layers(region, FunctionElevation(synthetic_ghats_elevation))
+    layers = StaticLayers.load()
     assembler = StateAssembler(layers, hot=hot, cold=cold, clock=clock)
     sink = TeeSink(cold, hot)
     bus = InMemoryBus()

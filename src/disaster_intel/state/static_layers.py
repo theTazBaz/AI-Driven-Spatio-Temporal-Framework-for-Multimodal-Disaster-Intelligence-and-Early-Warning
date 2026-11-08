@@ -193,12 +193,6 @@ class FunctionElevation:
         return [self._func(lat, lon) for lat, lon in points]
 
 
-def synthetic_ghats_elevation(lat: float, lon: float) -> float:
-    """Toy terrain: sea level on the coast rising smoothly to ~1,200 m inland (offline demo)."""
-    t = min(max((lon - 74.4) / 1.4, 0.0), 1.0)
-    return 1200.0 * t * t * (3.0 - 2.0 * t)
-
-
 class OpenMeteoElevation:
     """Copernicus GLO-90 elevations via Open-Meteo (free, no key, <= 100 points per request)."""
 
@@ -592,7 +586,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Build / inspect the static layers cache.")
     sub = parser.add_subparsers(dest="command", required=True)
     build = sub.add_parser("build", help="build static layers for the study region")
-    build.add_argument("--source", choices=["open-meteo", "synthetic"], default="open-meteo")
+    build.add_argument("--source", choices=["open-meteo"], default="open-meteo")
     build.add_argument("--population", help="WorldPop count raster (.tif/.tiff or Esri .asc)")
     build.add_argument(
         "--geology",
@@ -617,20 +611,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     cells = list(CoastalGrid(use_cache=True).cells)
     if args.limit is not None:
         cells = cells[: args.limit]
-    source: ElevationSource
-    if args.source == "synthetic":
-        source = FunctionElevation(synthetic_ghats_elevation)
-        meta = {"elevation": "SYNTHETIC toy terrain (not real data)"}
-    else:
-        from disaster_intel.state.elevation_cache import CachedElevation
+    from disaster_intel.state.elevation_cache import CachedElevation
 
-        source = CachedElevation(
-            OpenMeteoElevation(max_retries=2, initial_backoff_s=65.0),
-            path=args.elevation_cache,
-            pause_s=args.pause,
-            progress=lambda done, total: print(f"  elevation {done}/{total}", flush=True),
-        )
-        meta = {"elevation": "Copernicus DEM GLO-90 via Open-Meteo"}
+    source: ElevationSource = CachedElevation(
+        OpenMeteoElevation(max_retries=4, initial_backoff_s=25.0),
+        path=args.elevation_cache,
+        pause_s=args.pause,
+        progress=lambda done, total: print(f"  elevation {done}/{total}", flush=True),
+    )
+    meta = {"elevation": "Copernicus DEM GLO-90 via Open-Meteo"}
     density: dict[str, float] | None = None
     if args.population:
         path = Path(args.population)

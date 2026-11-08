@@ -262,3 +262,104 @@ class TestSentinel1PipelineIntegration:
             for obs in cell_obs:
                 assert obs.variable in catalog
                 assert obs.unit == catalog[obs.variable].canonical_unit
+
+
+# ── 7. Real GeoTIFF Processing and Ephemeral Disk Retention ──────────
+
+
+@pytest.mark.unit
+class TestSentinel1RealGeoTIFFAndCatalog:
+    """Verify processing real GeoTIFF rasters and ephemeral deletion guarantee."""
+
+    def test_process_real_geotiff_extraction(self) -> None:
+        real_tif = Path("data/satellite/India_900498_S2Hand.tif")
+        if not real_tif.exists():
+            pytest.skip("Real satellite GeoTIFF not present")
+
+        grid = CoastalGrid(use_cache=True)
+        adapter = Sentinel1Adapter(grid=grid)
+
+        # Process real GeoTIFF with subsampling
+        readings = adapter.process_geotiff(
+            real_tif,
+            timestamp=datetime(2024, 7, 13, 0, 48, tzinfo=UTC),
+            vh_band=1,
+            ephemeral=False,
+            step=32,
+        )
+
+        assert len(readings) > 0
+        vars_found = {r.variable for r in readings}
+        assert "sar_water_fraction" in vars_found
+        assert "sar_vh_backscatter_db" in vars_found
+
+        for r in readings:
+            assert r.source == "sentinel-1"
+            if r.variable == "sar_water_fraction":
+                assert 0.0 <= r.value <= 1.0
+            elif r.variable == "sar_vh_backscatter_db":
+                assert math.isfinite(r.value)
+
+    def test_ephemeral_zero_disk_retention_guarantee(self, tmp_path: Path) -> None:
+        """Verify that ephemeral=True immediately unlinks the raw raster file."""
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_bounds
+
+        # Create temporary dummy GeoTIFF in tmp_path
+        test_tif = tmp_path / "temp_orbit.tif"
+        data = np.full((16, 16), 0.08, dtype=np.float32)
+        transform = from_bounds(74.5, 12.5, 75.0, 13.0, 16, 16)
+
+        with rasterio.open(
+            test_tif,
+            "w",
+            driver="GTiff",
+            height=16,
+            width=16,
+            count=1,
+            dtype="float32",
+            crs="EPSG:4326",
+            transform=transform,
+        ) as dst:
+            dst.write(data, 1)
+
+        assert test_tif.exists()
+
+        grid = CoastalGrid(use_cache=True)
+        adapter = Sentinel1Adapter(grid=grid)
+
+        # Process with ephemeral=True
+        readings = adapter.process_geotiff(
+            test_tif,
+            timestamp=datetime(2024, 7, 13, 0, 48, tzinfo=UTC),
+            vh_band=1,
+            ephemeral=True,
+            step=4,
+        )
+
+        assert len(readings) > 0
+        # The file MUST be deleted from disk
+        assert not test_tif.exists(), (
+            "Raw GeoTIFF was not deleted; violates Zero Disk Retention Rule"
+        )
+
+
+@pytest.mark.live
+class TestSentinel1CDSELive:
+    """Live integration tests for Copernicus CDSE queries."""
+
+    def test_cdse_catalog_live_query(self) -> None:
+        """Query Copernicus CDSE live for genuine Sentinel-1 orbits."""
+        bbox = (12.0, 73.5, 16.0, 76.0)
+        products = Sentinel1Adapter.query_cdse_catalog(
+            bbox=bbox,
+            start_date="2024-07-10T00:00:00.000Z",
+            end_date="2024-07-25T00:00:00.000Z",
+            limit=5,
+        )
+        assert len(products) > 0
+        p0 = products[0]
+        assert "id" in p0
+        assert "name" in p0
+        assert "S1A_IW_GRDH" in p0["name"]

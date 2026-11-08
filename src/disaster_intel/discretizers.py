@@ -216,6 +216,27 @@ class PolygonDiscretizer:
         if not isinstance(reading.geometry, PolygonGeometry):
             raise ValueError(f"Expected PolygonGeometry, got {type(reading.geometry).__name__}")
 
+        lats = [v[0] for v in reading.geometry.vertices]
+        lons = [v[1] for v in reading.geometry.vertices]
+        min_lat, max_lat = min(lats), max(lats)
+        min_lon, max_lon = min(lons), max(lons)
+
+        # For subcontinental/oceanic polygons (>10 deg), evaluate directly against grid cells
+        # to prevent h3.polygon_to_cells from generating tens of millions of out-of-bounds cells.
+        if (max_lat - min_lat) > 10.0 or (max_lon - min_lon) > 10.0:
+            if max_lat < 11.9 or min_lat > 15.5 or max_lon < 74.0 or min_lon > 76.0:
+                return []
+            matched = []
+            for c in self.grid.cells:
+                clat, clon = self.grid.cell_to_latlng(c)
+                if (
+                    min_lat <= clat <= max_lat
+                    and min_lon <= clon <= max_lon
+                    and point_in_polygon(clat, clon, reading.geometry.vertices)
+                ):
+                    matched.append(c)
+            return [Observation.from_reading(reading, c) for c in sorted(matched)]
+
         poly = h3.LatLngPoly(reading.geometry.vertices)
         cells = h3.polygon_to_cells(poly, self.grid.resolution)
 

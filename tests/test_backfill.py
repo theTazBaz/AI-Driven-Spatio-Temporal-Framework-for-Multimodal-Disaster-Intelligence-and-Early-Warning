@@ -31,7 +31,6 @@ from disaster_intel.state import (
     FunctionElevation,
     StateAssembler,
     build_static_layers,
-    synthetic_ghats_elevation,
 )
 from disaster_intel.storage import HotStore
 from disaster_intel.windows import WindowValue, reference_windows
@@ -181,7 +180,7 @@ class TestPhase1EvaluationReport:
                 )
 
         cold = MockCold()
-        static = build_static_layers([SHIRUR_CELL], FunctionElevation(synthetic_ghats_elevation))
+        static = build_static_layers([SHIRUR_CELL], FunctionElevation(lambda lat, lon: 34.0))
         assembler = StateAssembler(static, hot=hot, cold=cold, clock=clock)
 
         window = BENCHMARK_WINDOWS["shirur_landslide_2024"]

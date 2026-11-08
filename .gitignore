@@ -20,7 +20,11 @@ htmlcov/
 .mypy_cache/
 
 # Local cache
-.cache/
+.cache/*
+!.cache/coastal_grid_res7.json
+!.cache/fan_out_res7_0.1deg.json
+!.cache/elevation_points.json
+!.cache/static_layers_res7.json
 
 # IDE
 .vscode/

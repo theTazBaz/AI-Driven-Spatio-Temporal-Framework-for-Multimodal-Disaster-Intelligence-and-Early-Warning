@@ -21,17 +21,15 @@ from disaster_intel.clock import FakeClock
 from disaster_intel.models import Observation, VariableCatalog
 from disaster_intel.state import (
     FeatureSpec,
-    FunctionElevation,
     StateAssembler,
     StateVector,
-    build_static_layers,
-    synthetic_ghats_elevation,
+    StaticLayers,
 )
 from disaster_intel.storage import ColdStore, HotStore, TeeSink
 from disaster_intel.windows import HOUR
 
 CATALOG = VariableCatalog.default()
-SPEC = FeatureSpec.v1()
+SPEC = FeatureSpec.v3()
 START = datetime(2024, 7, 14, tzinfo=UTC)
 CELL = h3.latlng_to_cell(12.42, 75.74, 7)  # Madikeri, Kodagu
 HOURS = 8 * 24
@@ -70,19 +68,12 @@ def show(vector: StateVector, label: str) -> None:
         print(f"  {name:<34}{text:>14}{extra}")
 
 
-def _static_layers():  # type: ignore[no-untyped-def]
-    """Real layers from .cache if built and containing CELL; otherwise synthetic terrain."""
-    from disaster_intel.state.static_layers import DEFAULT_STATIC_PATH, StaticLayers
+def _static_layers() -> StaticLayers:
+    """Real layers from .cache (Copernicus DEM + GSI NLSM)."""
+    from disaster_intel.state.static_layers import DEFAULT_STATIC_PATH
 
-    if DEFAULT_STATIC_PATH.is_file():
-        real = StaticLayers.load(DEFAULT_STATIC_PATH)
-        if CELL in real and "SYNTHETIC" not in real.meta.get("elevation", ""):
-            print(f"[static layers: REAL, {real.meta.get('elevation')}]")
-            return real
-    print("[static layers: SYNTHETIC terrain]")
-    return build_static_layers([CELL], FunctionElevation(synthetic_ghats_elevation))
-
-
+    print("[static layers: REAL Copernicus DEM GLO-90 + GSI NLSM]")
+    return StaticLayers.load(DEFAULT_STATIC_PATH)
 def main() -> None:
     clock = FakeClock(START)
     hot = HotStore.connect(clock=clock, prefix=f"demo:{uuid.uuid4().hex[:8]}:")

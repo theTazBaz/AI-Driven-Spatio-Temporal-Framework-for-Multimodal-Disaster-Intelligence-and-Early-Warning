@@ -33,7 +33,6 @@ from disaster_intel.state import (
     build_static_layers,
     map_gsi_lithology,
     map_gsi_susceptibility,
-    synthetic_ghats_elevation,
 )
 from disaster_intel.windows import WindowValue
 
@@ -225,7 +224,7 @@ class TestGeologyImmutability:
         cell = grid.cells[0]
 
         geology = GSIGeologySource()
-        elev = FunctionElevation(synthetic_ghats_elevation)
+        elev = FunctionElevation(lambda lat, lon: 150.0)
         layers = build_static_layers([cell], elevation=elev, geology=geology)
 
         f_t0 = layers.get(cell)

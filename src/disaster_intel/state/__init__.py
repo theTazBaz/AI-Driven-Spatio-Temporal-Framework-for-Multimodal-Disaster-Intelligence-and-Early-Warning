@@ -38,7 +38,6 @@ from disaster_intel.state.static_layers import (
     map_gsi_susceptibility,
     plane_slope_degrees,
     population_density_from_raster,
-    synthetic_ghats_elevation,
 )
 
 __all__ = [
@@ -75,5 +74,4 @@ __all__ = [
     "map_gsi_susceptibility",
     "plane_slope_degrees",
     "population_density_from_raster",
-    "synthetic_ghats_elevation",
 ]

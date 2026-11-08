@@ -16,6 +16,7 @@ dependencies = [
     "httpx>=0.28.1",
     "kafka-python-ng>=2.2.3",
     "numpy>=1.26.0",
+    "rasterio>=1.4.4",
     "redis>=5.0",
 ]
 

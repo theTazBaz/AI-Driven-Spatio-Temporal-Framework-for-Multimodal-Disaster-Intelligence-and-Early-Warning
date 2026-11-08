@@ -14,12 +14,14 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from disaster_intel.adapters.base import (
     AdapterMetrics,
     ParseError,
     SourceAdapter,
+    SourceError,
 )
 from disaster_intel.clock import Clock, SystemClock
 from disaster_intel.grid import CoastalGrid
@@ -230,6 +232,164 @@ class Sentinel1Adapter(SourceAdapter):
             )
 
             # 2. sar_vh_backscatter_db reading
+            readings.append(
+                RawReading(
+                    source=self.source_name,
+                    variable="sar_vh_backscatter_db",
+                    value=agg.mean_vh_db,
+                    timestamp=agg.timestamp,
+                    geometry=geom,
+                    unit="dB",
+                )
+            )
+
+        self.metrics.readings_produced += len(readings)
+        return readings
+
+    @classmethod
+    def query_cdse_catalog(
+        cls,
+        bbox: tuple[float, float, float, float],
+        start_date: str | datetime,
+        end_date: str | datetime,
+        product_type: str = "S1A_IW_GRDH",
+        limit: int = 10,
+        timeout: float = 20.0,
+    ) -> list[dict[str, Any]]:
+        """Query Copernicus Data Space Ecosystem (CDSE) OData catalog for real Sentinel-1 orbits.
+
+        Args:
+            bbox: (min_lat, min_lon, max_lat, max_lon) in WGS84 degrees.
+            start_date: Start ISO-8601 timestamp string or datetime.
+            end_date: End ISO-8601 timestamp string or datetime.
+            product_type: Prefix of product (default S1A_IW_GRDH).
+            limit: Maximum number of products to return.
+            timeout: HTTP request timeout in seconds.
+
+        Returns:
+            List of product metadata dicts with 'id', 'name', 'content_date', and 'footprint'.
+        """
+        import httpx
+
+        min_lat, min_lon, max_lat, max_lon = bbox
+        if isinstance(start_date, datetime):
+            start_str = start_date.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        else:
+            start_str = start_date if "Z" in start_date else f"{start_date}T00:00:00.000Z"
+
+        if isinstance(end_date, datetime):
+            end_str = end_date.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        else:
+            end_str = end_date if "Z" in end_date else f"{end_date}T23:59:59.000Z"
+
+        polygon_wkt = (
+            f"POLYGON(({min_lon:.4f} {min_lat:.4f}, "
+            f"{max_lon:.4f} {min_lat:.4f}, "
+            f"{max_lon:.4f} {max_lat:.4f}, "
+            f"{min_lon:.4f} {max_lat:.4f}, "
+            f"{min_lon:.4f} {min_lat:.4f}))"
+        )
+
+        filter_expr = (
+            f"startswith(Name,'{product_type}') and "
+            f"ContentDate/Start gt {start_str} and "
+            f"ContentDate/Start lt {end_str} and "
+            f"OData.CSC.Intersects(area=geography'SRID=4326;{polygon_wkt}')"
+        )
+
+        url = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
+        params = {
+            "$filter": filter_expr,
+            "$top": str(limit),
+            "$select": "Id,Name,ContentDate,GeoFootprint",
+        }
+
+        try:
+            resp = httpx.get(url, params=params, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            products: list[dict[str, Any]] = []
+            for item in data.get("value", []):
+                products.append(
+                    {
+                        "id": item.get("Id"),
+                        "name": item.get("Name"),
+                        "content_date": item.get("ContentDate", {}),
+                        "footprint": item.get("GeoFootprint", {}),
+                    }
+                )
+            return products
+        except Exception as e:
+            raise SourceError(f"Failed to query CDSE catalogue: {e}") from e
+
+    def process_geotiff(
+        self,
+        geotiff_path: Path | str,
+        timestamp: datetime | None = None,
+        vh_band: int = 1,
+        vv_band: int | None = None,
+        ephemeral: bool = False,
+        step: int = 4,
+    ) -> list[RawReading]:
+        """Process a GeoTIFF scene, extract backscatter and water fraction, and pool to H3 cells.
+
+        Enforces the Zero Disk Retention Rule: If ephemeral=True, the raw GeoTIFF is deleted
+        immediately after cell aggregation.
+        """
+        import rasterio
+
+        path = Path(geotiff_path)
+        if not path.exists():
+            raise FileNotFoundError(f"GeoTIFF file not found: {path}")
+
+        ts = timestamp or self.clock.now()
+        pixels: list[Sentinel1Pixel] = []
+
+        try:
+            with rasterio.open(path) as src:
+                vh_data = src.read(vh_band)
+                vv_data = src.read(vv_band) if vv_band is not None else None
+                height, width = vh_data.shape
+
+                # Subsample regularly to avoid memory saturation on gigabyte rasters
+                for r in range(0, height, step):
+                    for c in range(0, width, step):
+                        vh_val = float(vh_data[r, c])
+                        if not math.isfinite(vh_val) or vh_val <= 0.0:
+                            continue
+
+                        lon, lat = src.xy(r, c)
+                        vv_val = float(vv_data[r, c]) if vv_data is not None else None
+                        pixels.append(
+                            Sentinel1Pixel(
+                                lat=lat,
+                                lon=lon,
+                                vh_amplitude=vh_val,
+                                vv_amplitude=vv_val,
+                            )
+                        )
+        finally:
+            if ephemeral and path.exists():
+                path.unlink()
+
+        if not pixels:
+            return []
+
+        aggregates = self.aggregate_pixels(pixels, ts)
+        readings: list[RawReading] = []
+        for agg in aggregates:
+            cell_lat, cell_lon = self.grid.cell_to_latlng(agg.cell)
+            geom = PointGeometry(lat=cell_lat, lon=cell_lon)
+            readings.append(
+                RawReading(
+                    source=self.source_name,
+                    variable="sar_water_fraction",
+                    value=agg.water_fraction,
+                    timestamp=agg.timestamp,
+                    geometry=geom,
+                    unit="fraction",
+                )
+            )
             readings.append(
                 RawReading(
                     source=self.source_name,

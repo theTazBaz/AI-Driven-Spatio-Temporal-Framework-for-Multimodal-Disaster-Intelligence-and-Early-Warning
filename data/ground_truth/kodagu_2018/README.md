@@ -1,0 +1,13 @@
+"Creation of a Landslide Inventory for the 2018 Storm Event of Kodagu in the Western Ghats for Landslide Susceptibility Mapping Using Machine Learning"
+
+Abstract:A quintessential component of any type of landslide studies, like susceptibility mapping, risk assessment and identifying the  role of  influencing  parameters, is  a  landslide inventory  map  (LIM). LIM  helps  to analyse  the  spatial and  temporal characteristics of landslides, and is also vital for constructing a landslide early warning system. Thus, LIM plays a vital role in landslide disaster risk reduction processes. As a paradigm work, this study aims at creating a relatively complete landslide inventory dataset for the 2018 rainfall-triggered landslide in a small sector of the south of the Western Ghats, called Kodagu in Karnataka, India. Integration of field investigation, and visual interpretation of pre- and post-landslide images of the Google Earth and Sentinel-2A satellite data were used to construct this LIM. Field investigation was aimed at two components: (i) to verify the created inventory from satellite imageries and (ii) to map those landslides that could not be identified in the images due to non-availability of images or cloud covered images or for any other reasons. The final, newly created LIM comprised 267 landslides: 89 through field investigation, and 178 by image interpretation. Of these, 153 are shallow slides and 114 are debris flow, with major damages attributed to debris flow. The created LIM is uploaded in GitHub and can be freely downloaded by researchers and students for further studies. This LIM was further used to generate a landslide susceptibility map (LSM) using machine learning techniques. This empirical method of LSM was done in Google Colab, and the results show that Random Forest as the best model for the study area. Majority of the landslides are confined within the slope range of 14°-29°, elevation between 970 and 1100 m as well as 1200 and 1700 m, slope aspect corresponding to southwest and west direction, and convex surfaces, especially near roads within 750 m.
+
+
+	
+"Creation of a Landslide Inventory for the 2018 Storm Event of Kodagu in the Western Ghats for Landslide Susceptibility Mapping Using Machine Learning" publicly share full-text access to a view-only version of paper by using the following SharedIt link: https://rdcu.be/dQjsm
+
+Citation: Arpitha, G.A., Choodarathnakara, A.L., Rajaneesh, A. et al. Creation of a Landslide Inventory for the 2018 Storm Event of Kodagu in the Western Ghats for Landslide Susceptibility Mapping Using Machine Learning. J Indian Soc Remote Sens (2024). https://doi.org/10.1007/s12524-024-01953-8
+
+
+
+

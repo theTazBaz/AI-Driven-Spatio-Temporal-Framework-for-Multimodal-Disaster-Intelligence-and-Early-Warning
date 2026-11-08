@@ -1,20 +1,24 @@
 """Increment 11 & 15 — Embedder interface, Prithvi, Clay, and Fake embedders.
 
 Embedders extract spatio-temporal representations from satellite imagery chips:
-- FakeEmbedder: Fast, deterministic embedder for unit tests without PyTorch/GPU.
 - PrithviEmbedder: NASA-IBM Prithvi-EO-2.0 optical foundation model backbone.
 - ClayEmbedder: Multimodal Clay Foundation Model fusing SAR + Optical + DEM.
+- FakeEmbedder: Deterministic embedder for offline unit tests without model weights.
 - get_embedder: Configuration switch supporting runtime model selection.
 """
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
 import numpy as np
 
 from disaster_intel.imagery.chips import SatelliteChip
+
+DEFAULT_CLAY_WEIGHTS = Path(__file__).parent / "weights" / "clay_v1_patch_embed.npz"
+DEFAULT_PRITHVI_WEIGHTS = Path(__file__).parent / "weights" / "prithvi_patch_embed.npz"
 
 
 @runtime_checkable
@@ -98,20 +102,25 @@ class PrithviEmbedder:
         patch_size: int = 16,
         in_channels: int = 6,
         seed: int = 42,
+        weights_path: Path | str | None = None,
     ) -> None:
         self._embed_dim = embed_dim
         self.patch_size = patch_size
         self.in_channels = in_channels
         self.seed = seed
 
-        # Deterministic patch linear projection kernel
-        # Shape: (embed_dim, in_channels, patch_size, patch_size)
-        rng = np.random.default_rng(seed)
-        fan_in = in_channels * patch_size * patch_size
-        std = 1.0 / np.sqrt(fan_in)
-        kernel_shape = (embed_dim, in_channels, patch_size, patch_size)
-        self._proj_weights = rng.normal(0.0, std, kernel_shape).astype(np.float32)
-        self._proj_bias = np.zeros((embed_dim,), dtype=np.float32)
+        target_weights = Path(weights_path) if weights_path else DEFAULT_PRITHVI_WEIGHTS
+        if target_weights.is_file() and in_channels == 6 and patch_size == 16 and embed_dim == 768:
+            data = np.load(target_weights)
+            self._proj_weights = data["weights"].astype(np.float32)
+            self._proj_bias = data["bias"].astype(np.float32)
+        else:
+            rng = np.random.default_rng(seed)
+            fan_in = in_channels * patch_size * patch_size
+            std = 1.0 / np.sqrt(fan_in)
+            kernel_shape = (embed_dim, in_channels, patch_size, patch_size)
+            self._proj_weights = rng.normal(0.0, std, kernel_shape).astype(np.float32)
+            self._proj_bias = np.zeros((embed_dim,), dtype=np.float32)
 
     @property
     def embed_dim(self) -> int:
@@ -127,19 +136,16 @@ class PrithviEmbedder:
         nx = chip.width_px // chip.patch_size_px
 
         if image_data is None:
-            # Generate deterministic synthetic 6-band imagery if not supplied
             rng = np.random.default_rng(self.seed + hash(chip.parent_cell) % 100000)
             img_shape = (self.in_channels, chip.height_px, chip.width_px)
             image_data = rng.uniform(0.0, 1.0, img_shape).astype(np.float32)
 
-        # Handle batch dimension if present: (1, C, H, W) -> (C, H, W)
         if image_data.ndim == 4 and image_data.shape[0] == 1:
             image_data = image_data[0]
 
         if image_data.shape[0] != self.in_channels:
             raise ValueError(f"Expected {self.in_channels} input bands, got {image_data.shape[0]}")
 
-        # Patch extraction and projection
         p = self.patch_size
         out = np.zeros((ny, nx, self._embed_dim), dtype=np.float32)
 
@@ -149,7 +155,7 @@ class PrithviEmbedder:
             for c in range(nx):
                 c_start = c * p
                 c_end = c_start + p
-                patch = image_data[:, r_start:r_end, c_start:c_end]  # (C, p, p)
+                patch = image_data[:, r_start:r_end, c_start:c_end]
                 projected = np.sum(self._proj_weights * patch, axis=(1, 2, 3)) + self._proj_bias
                 out[r, c] = projected
 
@@ -163,12 +169,6 @@ class ClayEmbedder:
     - Sentinel-1 SAR (2 channels: VV, VH) -> indices 0, 1
     - Sentinel-2 Optical (6 channels: B02, B03, B04, B8A, B11, B12) -> indices 2, 3, 4, 5, 6, 7
     - Digital Elevation Model DEM (1 channel: elevation) -> index 8
-
-    Cloud-Mask Fallback:
-    When optical channels are completely obscured by monsoon clouds (or containing NaN),
-    the embedder handles missing optical bands gracefully by substituting a learned cloud
-    baseline and scaling active SAR + DEM channels, producing 100% finite, non-NaN
-    latent representations.
     """
 
     def __init__(
@@ -177,20 +177,25 @@ class ClayEmbedder:
         patch_size: int = 16,
         in_channels: int = 9,
         seed: int = 42,
+        weights_path: Path | str | None = None,
     ) -> None:
         self._embed_dim = embed_dim
         self.patch_size = patch_size
         self.in_channels = in_channels
         self.seed = seed
 
-        # Deterministic patch linear projection kernel
-        # Shape: (embed_dim, in_channels, patch_size, patch_size)
-        rng = np.random.default_rng(seed)
-        fan_in = in_channels * patch_size * patch_size
-        std = 1.0 / np.sqrt(fan_in)
-        kernel_shape = (embed_dim, in_channels, patch_size, patch_size)
-        self._proj_weights = rng.normal(0.0, std, kernel_shape).astype(np.float32)
-        self._proj_bias = np.zeros((embed_dim,), dtype=np.float32)
+        target_weights = Path(weights_path) if weights_path else DEFAULT_CLAY_WEIGHTS
+        if target_weights.is_file() and in_channels == 9 and patch_size == 16 and embed_dim == 768:
+            data = np.load(target_weights)
+            self._proj_weights = data["weights"].astype(np.float32)
+            self._proj_bias = data["bias"].astype(np.float32)
+        else:
+            rng = np.random.default_rng(seed)
+            fan_in = in_channels * patch_size * patch_size
+            std = 1.0 / np.sqrt(fan_in)
+            kernel_shape = (embed_dim, in_channels, patch_size, patch_size)
+            self._proj_weights = rng.normal(0.0, std, kernel_shape).astype(np.float32)
+            self._proj_bias = np.zeros((embed_dim,), dtype=np.float32)
 
     @property
     def embed_dim(self) -> int:
@@ -206,27 +211,22 @@ class ClayEmbedder:
         nx = chip.width_px // chip.patch_size_px
 
         if image_data is None:
-            # Generate deterministic synthetic 9-channel multimodal data
             rng = np.random.default_rng(self.seed + hash(chip.parent_cell) % 100000)
             img_shape = (self.in_channels, chip.height_px, chip.width_px)
             image_data = rng.uniform(0.1, 0.9, img_shape).astype(np.float32)
 
-        # Handle batch dimension if present: (1, C, H, W) -> (C, H, W)
         if image_data.ndim == 4 and image_data.shape[0] == 1:
             image_data = image_data[0]
 
         if image_data.shape[0] != self.in_channels:
             raise ValueError(f"Expected {self.in_channels} input bands, got {image_data.shape[0]}")
 
-        # Cloud-mask fallback: copy data to avoid mutating caller array
         clean_data = image_data.copy()
 
-        # Check for NaN in optical channels (indices 2:8) or elsewhere
         optical_nan = np.isnan(clean_data[2:8])
         if optical_nan.any():
             clean_data[2:8][optical_nan] = 0.0
 
-        # Also handle any other NaN in SAR or DEM
         other_nan = np.isnan(clean_data)
         if other_nan.any():
             clean_data[other_nan] = 0.0
@@ -240,9 +240,8 @@ class ClayEmbedder:
             for c in range(nx):
                 c_start = c * p
                 c_end = c_start + p
-                patch = clean_data[:, r_start:r_end, c_start:c_end]  # (C, p, p)
+                patch = clean_data[:, r_start:r_end, c_start:c_end]
 
-                # If patch is marked cloudy in cloud_mask, zero out optical bands for this patch
                 if cloud_mask is not None and cloud_mask[r, c] == 1:
                     patch = patch.copy()
                     patch[2:8, :, :] = 0.0
