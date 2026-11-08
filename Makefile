@@ -1,4 +1,4 @@
-.PHONY: evaluate test test-unit test-contract test-integration test-perf test-all lint fmt typecheck up down clean demo-hot rebuild-hot demo-state static-layers static-layers-offline
+.PHONY: evaluate test test-unit test-contract test-integration test-perf test-all lint fmt typecheck up down clean demo-hot rebuild-hot demo-state static-layers static-layers-offline dashboard
 
 # ── Testing ──────────────────────────────────────────────────────────
 test: test-unit  ## Default: run unit tests only (< 10 s)
@@ -49,6 +49,9 @@ static-layers-offline:  ## Same, with SYNTHETIC terrain (no network; for demos o
 # ── Evaluation & Benchmarking (Increment 13) ────────────────────────
 evaluate:  ## Run Phase 1 evaluation demo & generate metrics report
 	uv run python -m disaster_intel.evaluation
+
+dashboard:  ## Launch Tactical Command-Center web dashboard
+	uv run python scripts/serve_dashboard.py
 
 # ── Infrastructure ───────────────────────────────────────────────────
 up:  ## Start ClickHouse, Redis, Redpanda

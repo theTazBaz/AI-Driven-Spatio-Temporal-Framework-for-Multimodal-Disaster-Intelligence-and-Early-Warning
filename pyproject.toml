@@ -12,6 +12,7 @@ authors = [
 ]
 dependencies = [
     "clickhouse-connect>=1.11.0",
+    "fastapi>=0.162.2",
     "h3>=4.5.0",
     "httpx>=0.28.1",
     "kafka-python-ng>=2.2.3",
@@ -19,11 +20,13 @@ dependencies = [
     "pyshp>=3.1.7",
     "rasterio>=1.4.4",
     "redis>=5.0",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
 ingest = "disaster_intel.pipeline:main"
 disaster-intel = "disaster_intel.pipeline:main"
+disaster-intel-dashboard = "disaster_intel.dashboard.server:main"
 
 [project.optional-dependencies]
 geo = [

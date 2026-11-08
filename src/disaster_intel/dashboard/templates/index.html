@@ -1,0 +1,1247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DISASTER INTEL // Tactical Early Warning Radar</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet & Chart.js -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #070b14;
+      --bg-panel: rgba(13, 20, 36, 0.92);
+      --bg-panel-solid: #0d1424;
+      --bg-card: rgba(22, 33, 56, 0.75);
+      --border: #1e293b;
+      --border-accent: #0284c7;
+      --border-glow: rgba(56, 189, 248, 0.35);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-cyan: #38bdf8;
+      --accent-blue: #2563eb;
+      --accent-amber: #f59e0b;
+      --accent-orange: #f97316;
+      --accent-red: #ef4444;
+      --accent-emerald: #10b981;
+      --accent-purple: #c084fc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-main);
+      overflow-x: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #070b14; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    /* Top Navigation HUD */
+    #top-bar {
+      padding: 10px 18px;
+      background: #0b1120;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      z-index: 100;
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.8px;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-glow {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #38bdf8;
+      box-shadow: 0 0 10px #38bdf8;
+    }
+    .badge-nitk {
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+    }
+
+    /* Mode Switcher Buttons */
+    .mode-switch-group {
+      display: flex;
+      background: #070b14;
+      padding: 2px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      gap: 2px;
+    }
+    .mode-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 5px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mode-btn.active {
+      background: #1e293b;
+      color: #fff;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+    }
+    .mode-btn.active.live {
+      background: linear-gradient(135deg, #065f46, #047857);
+      color: #6ee7b7;
+      border: 1px solid #059669;
+    }
+
+    /* Metric Selector Pills */
+    #metric-bar {
+      padding: 6px 18px;
+      background: #080d1a;
+      border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .metric-pill {
+      background: #0f172a;
+      color: #94a3b8;
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .metric-pill:hover { background: #1e293b; color: #fff; }
+    .metric-pill.active {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      color: #fff;
+      border-color: #38bdf8;
+      box-shadow: 0 0 10px rgba(2, 132, 199, 0.4);
+    }
+
+    /* Map & Viewport */
+    #main-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      min-height: 250px;
+    }
+    #map { height: 100%; width: 100%; background: #070b14; }
+
+    /* Interactive Hexagon Map Hover Tooltip */
+    .leaflet-tooltip.tactical-tooltip {
+      background: rgba(11, 17, 32, 0.95);
+      border: 1px solid #0284c7;
+      color: #f8fafc;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+      padding: 6px 10px;
+    }
+
+    /* Cell Inspector Panel (Right Drawer) */
+    #inspector-panel {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 1000;
+      width: 380px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.75);
+      font-size: 13px;
+      max-height: calc(100% - 28px);
+      overflow-y: auto;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+    #inspector-panel.minimized {
+      transform: translateX(110%);
+      opacity: 0.2;
+    }
+    .inspector-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .cell-id-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: #070b14;
+      padding: 3px 8px;
+      border-radius: 4px;
+      color: #38bdf8;
+      border: 1px solid #1e293b;
+    }
+
+    /* Threat Status Pills */
+    .threat-pill {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .threat-normal { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid #059669; }
+    .threat-advisory { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #d97706; }
+    .threat-warning { background: rgba(249, 115, 22, 0.25); color: #fb923c; border: 1px solid #ea580c; }
+    .threat-critical {
+      background: rgba(239, 68, 68, 0.25);
+      color: #f87171;
+      border: 1px solid #dc2626;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+
+    /* Geomorphology Grid */
+    .geo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 12px;
+      background: var(--bg-card);
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(30, 41, 59, 0.6);
+    }
+    .geo-item-lbl { font-size: 11px; color: var(--text-muted); }
+    .geo-item-val { font-size: 13px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #f1f5f9; }
+
+    /* Dynamic Telemetry Rows */
+    .tel-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(30, 41, 59, 0.6);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 12px;
+    }
+    .tel-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px dashed rgba(30, 41, 59, 0.8);
+    }
+    .tel-row:last-child { border-bottom: none; }
+    .tel-lbl { font-size: 12px; color: var(--text-muted); }
+    .tel-val { font-size: 13px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #f8fafc; }
+
+    /* Ground Truth Banner */
+    .gt-banner {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .gt-positive { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; }
+    .gt-negative { background: rgba(30, 41, 59, 0.4); border: 1px solid #334155; color: #94a3b8; }
+
+    /* 86-D Vector Modal */
+    #vector-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    #vector-modal.open { display: flex; }
+    .modal-box {
+      width: 820px;
+      max-width: 95vw;
+      max-height: 85vh;
+      background: #0d1424;
+      border: 1px solid #0284c7;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #070b14;
+    }
+    .modal-body {
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* Bottom Control & Timeline Scrubber Dock */
+    #bottom-dock {
+      background: #0b1120;
+      border-top: 1px solid var(--border);
+      padding: 10px 18px 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 90;
+    }
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .ctrl-btn {
+      background: #1e293b;
+      color: #f1f5f9;
+      border: 1px solid #334155;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .ctrl-btn:hover { background: #334155; }
+    .ctrl-btn.play { background: #0284c7; border-color: #38bdf8; }
+    .ctrl-btn.play:hover { background: #0369a1; }
+
+    .slider-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 250px;
+    }
+    #time-slider {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: #1e293b;
+      outline: none;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+    .time-badge {
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--accent-amber);
+      background: #070b14;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #1e293b;
+      white-space: nowrap;
+    }
+    .ist-badge { color: #38bdf8; font-size: 11px; margin-left: 6px; }
+
+    /* Chart Area */
+    .chart-container {
+      width: 100%;
+      height: 110px;
+      position: relative;
+      background: #070b14;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    /* Live Operational Alert Ticker */
+    #alert-ticker {
+      display: none;
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 1000;
+      width: 360px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.65);
+    }
+    #alert-ticker.visible { display: block; }
+    .ticker-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-top: 8px;
+    }
+
+    /* Floating Legend */
+    #legend-box {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      z-index: 1000;
+      background: rgba(11, 17, 32, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 11px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      pointer-events: none;
+    }
+    .legend-bar {
+      height: 8px;
+      width: 180px;
+      border-radius: 4px;
+      margin: 5px 0;
+      background: linear-gradient(to right, #1e293b, #0284c7, #10b981, #f59e0b, #ef4444);
+    }
+    .legend-ticks { display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation & HUD Bar -->
+  <header id="top-bar">
+    <div class="brand-title">
+      <span class="brand-glow"></span>
+      <span>DISASTER INTEL // TACTICAL RADAR</span>
+      <span class="badge-nitk">NITK SURATHKAL</span>
+    </div>
+
+    <!-- Mode Selector Group -->
+    <div class="mode-switch-group">
+      <button id="btn-mode-replay" class="mode-btn active" onclick="setMode('replay')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        HISTORICAL REPLAY
+      </button>
+      <button id="btn-mode-live" class="mode-btn" onclick="setMode('live')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        LIVE OPERATIONAL
+      </button>
+    </div>
+
+    <!-- Event Selector (Replay Mode) -->
+    <div id="event-selector-wrap" style="display: flex; align-items: center; gap: 8px;">
+      <select id="event-select" onchange="changeEvent(this.value)" style="background: #070b14; color: #f8fafc; border: 1px solid var(--border); padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; outline: none; cursor: pointer;">
+        <option value="shirur_2024">2024 Shirur NH-66 Hill Collapse (Uttara Kannada)</option>
+        <option value="kodagu_2018">2018 Kodagu Cloudburst Landslides (Western Ghats)</option>
+        <option value="uttara_kannada_2021">2021 Uttara Kannada Gangavali River Flood</option>
+      </select>
+    </div>
+
+    <!-- Right Controls -->
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+      <button class="ctrl-btn" onclick="toggleGroundTruth()" id="btn-gt-toggle" title="Toggle GSI Landslide Survey Overlay">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#06b6d4;"></span>
+        GSI SURVEY
+      </button>
+      <button class="ctrl-btn" onclick="openVectorModal()" title="Inspect 86-Dimensional Vector for Selected Cell">
+        <span class="mono" style="color: #38bdf8; font-weight: 700;">86-D</span> VECTOR
+      </button>
+      <div id="connection-pill" style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #34d399; font-weight: 600;">
+        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
+        HOT: REDIS (1.7ms)
+      </div>
+    </div>
+  </header>
+
+  <!-- Metric Selector Bar -->
+  <nav id="metric-bar">
+    <span style="font-size: 11px; font-weight: 700; color: #7dd3fc; margin-right: 4px; text-transform: uppercase;">SURFACE HAZARD METRIC:</span>
+    <button class="metric-pill active" onclick="setMetric('cs')" id="m-cs">Compound Saturation (sm x p72)</button>
+    <button class="metric-pill" onclick="setMetric('p24')" id="m-p24">24h Rainfall (mm)</button>
+    <button class="metric-pill" onclick="setMetric('p72')" id="m-p72">72h Accumulation (mm)</button>
+    <button class="metric-pill" onclick="setMetric('p1')" id="m-p1">1h Peak Rain (mm)</button>
+    <button class="metric-pill" onclick="setMetric('sm')" id="m-sm">Rootzone Soil Moisture</button>
+    <button class="metric-pill" onclick="setMetric('shear')" id="m-shear">Slope Shear Risk</button>
+  </nav>
+
+  <!-- Main Map Canvas -->
+  <main id="main-container">
+    <div id="map"></div>
+
+    <!-- Floating Live Operational Radar Alert Ticker (Live Mode) -->
+    <div id="alert-ticker">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 8px;">
+        <div style="font-weight: 700; font-size: 12px; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
+          <span class="brand-glow"></span> LIVE MULTIMODAL RADAR
+        </div>
+        <button class="ctrl-btn" style="padding: 2px 6px; font-size: 10px;" onclick="refreshLiveRadar()">POLL APIS</button>
+      </div>
+      <div id="ticker-content" style="font-size: 12px;"></div>
+    </div>
+
+    <!-- Floating Master Legend -->
+    <div id="legend-box">
+      <div id="legend-title" style="font-weight: 700; color: #cbd5e1; margin-bottom: 2px;">COMPOUND SATURATION INDEX</div>
+      <div class="legend-bar"></div>
+      <div class="legend-ticks">
+        <span id="leg-min">0.0</span>
+        <span id="leg-mid">50.0</span>
+        <span id="leg-max">120.0+</span>
+      </div>
+    </div>
+
+    <!-- Interactive Cell Inspector Drawer (Right Side) -->
+    <aside id="inspector-panel">
+      <div class="inspector-header">
+        <div>
+          <div style="font-size: 10px; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.5px;">H3 RES-7 CELL INSPECTOR</div>
+          <div class="cell-id-badge" id="insp-cell-id">Select a cell</div>
+        </div>
+        <div id="insp-threat-pill" class="threat-pill threat-normal">NORMAL</div>
+      </div>
+
+      <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px; display: flex; justify-content: space-between;">
+        <span>District: <strong id="insp-district" style="color: #f1f5f9;">Uttara Kannada</strong></span>
+        <span class="mono" id="insp-coords">14.980°N, 74.300°E</span>
+      </div>
+
+      <!-- Ground Truth Banner -->
+      <div id="insp-gt-banner" class="gt-banner gt-negative">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <span id="insp-gt-text">GSI NLSM: No recorded landslide scar at this cell</span>
+      </div>
+
+      <!-- Geomorphology Card -->
+      <div style="font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; text-transform: uppercase;">Copernicus 30m Geomorphology</div>
+      <div class="geo-grid">
+        <div>
+          <div class="geo-item-lbl">DEM Elevation</div>
+          <div class="geo-item-val" id="insp-elev">-- m</div>
+        </div>
+        <div>
+          <div class="geo-item-lbl">Terrain Slope</div>
+          <div class="geo-item-val" id="insp-slope">--°</div>
+        </div>
+        <div>
+          <div class="geo-item-lbl">GSI Susceptibility</div>
+          <div class="geo-item-val" id="insp-gsi">--</div>
+        </div>
+        <div>
+          <div class="geo-item-lbl">Slope Shear Index</div>
+          <div class="geo-item-val" id="insp-shear" style="color: #f59e0b;">--</div>
+        </div>
+      </div>
+
+      <!-- Dynamic Multi-Horizon Telemetry -->
+      <div style="font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 4px; text-transform: uppercase;">Rolling Multi-Horizon Telemetry</div>
+      <div class="tel-card">
+        <div class="tel-row">
+          <span class="tel-lbl">1-Hour Peak Precipitation</span>
+          <span class="tel-val" id="insp-p1">-- mm</span>
+        </div>
+        <div class="tel-row">
+          <span class="tel-lbl">24-Hour Cumulative Rainfall</span>
+          <span class="tel-val" id="insp-p24">-- mm</span>
+        </div>
+        <div class="tel-row">
+          <span class="tel-lbl">72-Hour Cumulative Rainfall</span>
+          <span class="tel-val" id="insp-p72">-- mm</span>
+        </div>
+        <div class="tel-row">
+          <span class="tel-lbl">Rootzone Soil Moisture</span>
+          <span class="tel-val" id="insp-sm">--</span>
+        </div>
+        <div class="tel-row" style="background: rgba(2, 132, 199, 0.15); padding: 4px; border-radius: 4px;">
+          <span class="tel-lbl" style="color: #7dd3fc; font-weight: 600;">Compound Saturation Index</span>
+          <span class="tel-val" id="insp-cs" style="color: #38bdf8;">--</span>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button class="ctrl-btn" style="width: 100%; justify-content: center; padding: 7px;" onclick="openVectorModal()">
+        VIEW COMPLETE 86-D WORLDSTATE VECTOR
+      </button>
+    </aside>
+  </main>
+
+  <!-- Bottom Dock: Scrubber & Hydrograph Chart -->
+  <footer id="bottom-dock">
+    <div class="controls-row">
+      <button id="play-btn" class="ctrl-btn play" onclick="togglePlay()">
+        <svg id="play-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        <span id="play-text">PLAY</span>
+      </button>
+      <button class="ctrl-btn" onclick="stepFrame(-1)">&#9664; -6h</button>
+      <button class="ctrl-btn" onclick="stepFrame(1)">+6h &#9654;</button>
+
+      <!-- Timeline Slider -->
+      <div class="slider-wrap">
+        <input type="range" id="time-slider" min="0" max="0" value="0" oninput="onSliderMove(this.value)">
+        <div class="time-badge">
+          <span id="badge-utc">--</span>
+          <span class="ist-badge" id="badge-ist">-- IST</span>
+        </div>
+      </div>
+
+      <!-- Playback Speed -->
+      <div style="display: flex; gap: 4px;">
+        <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px;" onclick="setSpeed(1)">1x</button>
+        <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px;" onclick="setSpeed(2)">2x</button>
+        <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px;" onclick="setSpeed(4)">4x</button>
+      </div>
+    </div>
+
+    <!-- Interactive Time-Series Hydrograph -->
+    <div class="chart-container">
+      <canvas id="hydrograph-canvas"></canvas>
+    </div>
+  </footer>
+
+  <!-- 86-Dimensional WorldState Vector Modal -->
+  <div id="vector-modal" onclick="if(event.target === this) closeVectorModal()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div style="font-weight: 700; font-size: 14px; color: var(--accent-cyan); display: flex; align-items: center; gap: 8px;">
+            <span>FULL 86-DIMENSIONAL WORLDSTATE VECTOR (SPEC V3)</span>
+          </div>
+          <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+            Evaluated for Cell <span class="mono" id="modal-cell-id" style="color: #f1f5f9;">--</span>
+          </div>
+        </div>
+        <button class="ctrl-btn" style="padding: 4px 10px;" onclick="closeVectorModal()">ESC / CLOSE</button>
+      </div>
+
+      <!-- Filter Input -->
+      <div style="padding: 10px 16px; background: #070b14; border-bottom: 1px solid var(--border);">
+        <input type="text" id="vector-filter" placeholder="Filter by feature name (e.g. precipitation, embedding, slope)..." oninput="filterVectorTable(this.value)" style="width: 100%; background: #0f172a; border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; color: #f8fafc; font-size: 12px; outline: none;">
+      </div>
+
+      <div class="modal-body">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border); color: #7dd3fc; text-align: left;">
+              <th style="padding: 6px 8px;">#</th>
+              <th style="padding: 6px 8px;">Feature Name</th>
+              <th style="padding: 6px 8px;">Category</th>
+              <th style="padding: 6px 8px;">Value</th>
+              <th style="padding: 6px 8px;">Physical Meaning & Window Definition</th>
+            </tr>
+          </thead>
+          <tbody id="vector-table-body">
+            <!-- Dynamic Vector Rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ------------------------------------------------------------------------
+    // Global Application State
+    // ------------------------------------------------------------------------
+    let mode = 'replay'; // 'replay' | 'live'
+    let currentEventId = 'shirur_2024';
+    let currentMetric = 'cs';
+    let replayData = null;
+    let liveData = null;
+    let currentFrameIdx = 0;
+    let isPlaying = false;
+    let playInterval = null;
+    let playSpeed = 1;
+    let selectedCellId = null;
+    let groundTruthVisible = false;
+
+    // Leaflet Layers
+    let map = null;
+    let hexLayerGroup = null;
+    let groundTruthLayerGroup = null;
+    let chartInstance = null;
+
+    // Metric configurations (Ranges for chloropleth normalization)
+    const METRIC_CONFIG = {
+      cs: { name: 'Compound Saturation', min: 0, max: 120, unit: '', colorScale: ['#1e293b', '#0284c7', '#10b981', '#f59e0b', '#ef4444'] },
+      p24: { name: '24h Rainfall', min: 0, max: 180, unit: 'mm', colorScale: ['#1e293b', '#0284c7', '#38bdf8', '#fb923c', '#ef4444'] },
+      p72: { name: '72h Accumulation', min: 0, max: 400, unit: 'mm', colorScale: ['#1e293b', '#0369a1', '#10b981', '#eab308', '#dc2626'] },
+      p1: { name: '1h Peak Rainfall', min: 0, max: 45, unit: 'mm', colorScale: ['#1e293b', '#0284c7', '#eab308', '#ef4444'] },
+      sm: { name: 'Rootzone Soil Moisture', min: 0.2, max: 0.55, unit: '', colorScale: ['#1e293b', '#38bdf8', '#10b981', '#f59e0b'] },
+      shear: { name: 'Slope Shear Risk', min: 0, max: 25, unit: '', colorScale: ['#1e293b', '#10b981', '#f59e0b', '#ef4444'] },
+    };
+
+    // Metric index mapping in replay frame vector: [p1, p6, p24, p72, p7d, sm, cs]
+    const METRIC_IDX = { p1: 0, p6: 1, p24: 2, p72: 3, p7d: 4, sm: 5, cs: 6 };
+
+    // ------------------------------------------------------------------------
+    // Initialization
+    // ------------------------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', async () => {
+      initMap();
+      initChart();
+      await loadReplayEvent(currentEventId);
+    });
+
+    function initMap() {
+      // Initialize Leaflet map with CartoDB Dark Matter tiles
+      map = L.map('map', {
+        zoomControl: true,
+        attributionControl: false,
+      }).setView([14.98, 74.30], 10);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 18,
+        subdomains: 'abcd',
+      }).addTo(map);
+
+      hexLayerGroup = L.layerGroup().addTo(map);
+      groundTruthLayerGroup = L.layerGroup().addTo(map);
+    }
+
+    function initChart() {
+      const ctx = document.getElementById('hydrograph-canvas').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Hourly Rainfall (mm)',
+              data: [],
+              backgroundColor: 'rgba(56, 189, 248, 0.5)',
+              borderColor: '#38bdf8',
+              borderWidth: 1,
+              yAxisID: 'yRain',
+            },
+            {
+              type: 'line',
+              label: 'Compound Saturation',
+              data: [],
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              borderWidth: 2,
+              pointRadius: 0,
+              yAxisID: 'yCompound',
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: {
+              labels: { color: '#94a3b8', font: { family: 'DM Sans', size: 10 } }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(30, 41, 59, 0.4)' },
+              ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 9 }, maxTicksLimit: 12 }
+            },
+            yRain: {
+              position: 'left',
+              grid: { color: 'rgba(30, 41, 59, 0.4)' },
+              ticks: { color: '#38bdf8', font: { family: 'JetBrains Mono', size: 9 } },
+              title: { display: true, text: 'Rain (mm)', color: '#38bdf8', font: { size: 9 } }
+            },
+            yCompound: {
+              position: 'right',
+              grid: { drawOnChartArea: false },
+              ticks: { color: '#f59e0b', font: { family: 'JetBrains Mono', size: 9 } },
+              title: { display: true, text: 'Saturation', color: '#f59e0b', font: { size: 9 } }
+            }
+          }
+        }
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // Replay Loading and Rendering
+    // ------------------------------------------------------------------------
+    async function loadReplayEvent(eventId) {
+      pause();
+      currentEventId = eventId;
+      try {
+        const resp = await fetch(`/api/replay/${eventId}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        replayData = await resp.json();
+
+        // Center map on focal coordinates
+        if (replayData.focal_coords) {
+          map.setView(replayData.focal_coords, 10);
+        }
+
+        // Configure time slider
+        const slider = document.getElementById('time-slider');
+        slider.min = 0;
+        slider.max = replayData.frames.length - 1;
+        slider.value = 0;
+        currentFrameIdx = 0;
+
+        // Select focal cell by default
+        selectedCellId = replayData.focal;
+
+        // Render first frame
+        renderCurrentFrame();
+        updateInspector(selectedCellId);
+        updateChart(selectedCellId);
+
+        // Load ground truth if overlay was active
+        if (groundTruthVisible) {
+          loadGroundTruth(currentEventId);
+        }
+      } catch (err) {
+        console.error('Failed to load replay:', err);
+      }
+    }
+
+    function renderCurrentFrame() {
+      if (!replayData || !replayData.frames || replayData.frames.length === 0) return;
+      const frame = replayData.frames[currentFrameIdx];
+      if (!frame) return;
+
+      // Update timestamp badges
+      document.getElementById('badge-utc').innerText = frame.t + ' UTC';
+      document.getElementById('badge-ist').innerText = frame.t_ist + ' IST';
+      document.getElementById('time-slider').value = currentFrameIdx;
+
+      // Clear existing hexagons
+      hexLayerGroup.clearLayers();
+
+      const conf = METRIC_CONFIG[currentMetric];
+      const metricIdx = METRIC_IDX[currentMetric];
+
+      // Draw all H3 cells
+      for (const [cellId, cellMeta] of Object.entries(replayData.cells)) {
+        let val = null;
+        if (currentMetric === 'shear') {
+          val = (cellMeta.slope || 0) * (cellMeta.gsi_idx || 0);
+        } else if (frame.v[cellId] && metricIdx !== undefined) {
+          val = frame.v[cellId][metricIdx];
+        }
+
+        const color = getHazardColor(val, conf.min, conf.max);
+        const isSelected = (cellId === selectedCellId);
+
+        const polygon = L.polygon(cellMeta.poly, {
+          color: isSelected ? '#38bdf8' : 'rgba(51, 65, 85, 0.6)',
+          weight: isSelected ? 3 : 1,
+          fillColor: color,
+          fillOpacity: 0.72,
+        });
+
+        polygon.on('click', () => {
+          selectCell(cellId);
+        });
+
+        polygon.bindTooltip(
+          `<strong>Cell:</strong> ${cellId}<br><strong>${conf.name}:</strong> ${val !== null ? val.toFixed(2) : 'NaN'} ${conf.unit}<br><strong>Slope:</strong> ${cellMeta.slope}° | <strong>Elev:</strong> ${cellMeta.elev}m`,
+          { className: 'tactical-tooltip', sticky: true }
+        );
+
+        hexLayerGroup.addLayer(polygon);
+      }
+    }
+
+    function getHazardColor(val, min, max) {
+      if (val === null || val === undefined || isNaN(val)) return 'rgba(30, 41, 59, 0.4)';
+      const norm = Math.max(0, Math.min(1, (val - min) / (max - min)));
+      if (norm < 0.25) return '#0284c7';
+      if (norm < 0.50) return '#10b981';
+      if (norm < 0.75) return '#f59e0b';
+      if (norm < 0.90) return '#f97316';
+      return '#ef4444';
+    }
+
+    function selectCell(cellId) {
+      selectedCellId = cellId;
+      renderCurrentFrame();
+      updateInspector(cellId);
+      updateChart(cellId);
+    }
+
+    async function updateInspector(cellId) {
+      if (!cellId) return;
+      document.getElementById('insp-cell-id').innerText = cellId;
+
+      try {
+        const resp = await fetch(`/api/cell/${cellId}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        document.getElementById('insp-district').innerText = data.district;
+        document.getElementById('insp-coords').innerText = `${data.centroid.lat.toFixed(3)}°N, ${data.centroid.lon.toFixed(3)}°E`;
+        document.getElementById('insp-elev').innerText = `${data.geomorphology.elevation_m} m`;
+        document.getElementById('insp-slope').innerText = `${data.geomorphology.slope_deg}°`;
+        document.getElementById('insp-gsi').innerText = data.geomorphology.gsi_susceptibility_index;
+        document.getElementById('insp-shear').innerText = data.geomorphology.slope_shear_risk;
+
+        // Ground truth verification banner
+        const gtPositive = data.ground_truth_positives[currentEventId];
+        const banner = document.getElementById('insp-gt-banner');
+        const gtText = document.getElementById('insp-gt-text');
+        if (gtPositive) {
+          banner.className = 'gt-banner gt-positive';
+          gtText.innerText = 'OFFICIAL GSI NLSM GROUND TRUTH: DOCUMENTED LANDSLIDE SCAR';
+        } else {
+          banner.className = 'gt-banner gt-negative';
+          gtText.innerText = 'GSI NLSM: No recorded landslide scar at this cell';
+        }
+
+        // Live/Frame metrics
+        if (replayData && replayData.frames && replayData.frames[currentFrameIdx]) {
+          const v = replayData.frames[currentFrameIdx].v[cellId];
+          if (v) {
+            document.getElementById('insp-p1').innerText = `${v[0] !== null ? v[0] : '--'} mm`;
+            document.getElementById('insp-p24').innerText = `${v[2] !== null ? v[2] : '--'} mm`;
+            document.getElementById('insp-p72').innerText = `${v[3] !== null ? v[3] : '--'} mm`;
+            document.getElementById('insp-sm').innerText = `${v[5] !== null ? v[5] : '--'}`;
+            document.getElementById('insp-cs').innerText = `${v[6] !== null ? v[6] : '--'}`;
+
+            // Threat level pill
+            const pill = document.getElementById('insp-threat-pill');
+            const cs = v[6] || 0;
+            if (cs > 100) {
+              pill.className = 'threat-pill threat-critical';
+              pill.innerText = 'CRITICAL';
+            } else if (cs > 50) {
+              pill.className = 'threat-pill threat-warning';
+              pill.innerText = 'WARNING';
+            } else if (cs > 20) {
+              pill.className = 'threat-pill threat-advisory';
+              pill.innerText = 'ADVISORY';
+            } else {
+              pill.className = 'threat-pill threat-normal';
+              pill.innerText = 'BASELINE';
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Inspector error:', err);
+      }
+    }
+
+    function updateChart(cellId) {
+      if (!replayData || !chartInstance) return;
+      const tsData = (replayData.timeseries && replayData.timeseries[cellId]) 
+        || (replayData.timeseries && replayData.timeseries[replayData.focal]) || [];
+
+      chartInstance.data.labels = tsData.map(d => d.t.slice(5));
+      chartInstance.data.datasets[0].data = tsData.map(d => d.p1);
+      chartInstance.data.datasets[1].data = tsData.map(d => d.cs);
+      chartInstance.update();
+    }
+
+    // ------------------------------------------------------------------------
+    // Timeline Playback Controls
+    // ------------------------------------------------------------------------
+    function togglePlay() {
+      if (isPlaying) {
+        pause();
+      } else {
+        play();
+      }
+    }
+
+    function play() {
+      isPlaying = true;
+      document.getElementById('play-text').innerText = 'PAUSE';
+      document.getElementById('play-icon').innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+      
+      const intervalMs = Math.max(100, 800 / playSpeed);
+      playInterval = setInterval(() => {
+        if (!replayData || !replayData.frames) return;
+        currentFrameIdx++;
+        if (currentFrameIdx >= replayData.frames.length) {
+          currentFrameIdx = 0; // Loop playback
+        }
+        renderCurrentFrame();
+        updateInspector(selectedCellId);
+      }, intervalMs);
+    }
+
+    function pause() {
+      isPlaying = false;
+      document.getElementById('play-text').innerText = 'PLAY';
+      document.getElementById('play-icon').innerHTML = '<polygon points="5 3 19 12 5 21 5 3"></polygon>';
+      if (playInterval) {
+        clearInterval(playInterval);
+        playInterval = null;
+      }
+    }
+
+    function stepFrame(delta) {
+      if (!replayData || !replayData.frames) return;
+      pause();
+      currentFrameIdx = Math.max(0, Math.min(replayData.frames.length - 1, currentFrameIdx + delta));
+      renderCurrentFrame();
+      updateInspector(selectedCellId);
+    }
+
+    function onSliderMove(val) {
+      pause();
+      currentFrameIdx = parseInt(val, 10);
+      renderCurrentFrame();
+      updateInspector(selectedCellId);
+    }
+
+    function setSpeed(spd) {
+      playSpeed = spd;
+      if (isPlaying) {
+        pause();
+        play();
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // Mode and Metric Switching
+    // ------------------------------------------------------------------------
+    function setMode(newMode) {
+      mode = newMode;
+      document.getElementById('btn-mode-replay').className = `mode-btn ${mode === 'replay' ? 'active' : ''}`;
+      document.getElementById('btn-mode-live').className = `mode-btn ${mode === 'live' ? 'active live' : ''}`;
+      
+      const eventSelector = document.getElementById('event-selector-wrap');
+      const bottomDock = document.getElementById('bottom-dock');
+      const alertTicker = document.getElementById('alert-ticker');
+
+      if (mode === 'live') {
+        pause();
+        eventSelector.style.display = 'none';
+        bottomDock.style.display = 'none';
+        alertTicker.className = 'visible';
+        refreshLiveRadar();
+      } else {
+        eventSelector.style.display = 'flex';
+        bottomDock.style.display = 'flex';
+        alertTicker.className = '';
+        renderCurrentFrame();
+      }
+    }
+
+    function changeEvent(eventId) {
+      loadReplayEvent(eventId);
+    }
+
+    function setMetric(m) {
+      currentMetric = m;
+      document.querySelectorAll('.metric-pill').forEach(el => el.classList.remove('active'));
+      const activeBtn = document.getElementById(`m-${m}`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const conf = METRIC_CONFIG[m];
+      document.getElementById('legend-title').innerText = conf.name.toUpperCase();
+      document.getElementById('leg-min').innerText = conf.min + conf.unit;
+      document.getElementById('leg-max').innerText = conf.max + '+' + conf.unit;
+
+      renderCurrentFrame();
+    }
+
+    // ------------------------------------------------------------------------
+    // Ground Truth GSI Overlay
+    // ------------------------------------------------------------------------
+    function toggleGroundTruth() {
+      groundTruthVisible = !groundTruthVisible;
+      const btn = document.getElementById('btn-gt-toggle');
+      if (groundTruthVisible) {
+        btn.style.borderColor = '#06b6d4';
+        btn.style.background = '#0e3a47';
+        loadGroundTruth(currentEventId);
+      } else {
+        btn.style.borderColor = '#334155';
+        btn.style.background = '#1e293b';
+        groundTruthLayerGroup.clearLayers();
+      }
+    }
+
+    async function loadGroundTruth(eventId) {
+      groundTruthLayerGroup.clearLayers();
+      try {
+        const resp = await fetch(`/api/ground_truth/${eventId}`);
+        if (!resp.ok) return;
+        const geojson = await resp.json();
+
+        L.geoJSON(geojson, {
+          pointToLayer: function (feature, latlng) {
+            return L.circleMarker(latlng, {
+              radius: 5,
+              fillColor: '#06b6d4',
+              color: '#ffffff',
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.85
+            });
+          },
+          style: function (feature) {
+            if (feature.geometry.type === 'Polygon') {
+              return {
+                color: '#eab308',
+                weight: 2,
+                fillColor: '#fde047',
+                fillOpacity: 0.35,
+                dashArray: '3, 4'
+              };
+            }
+          },
+          onEachFeature: function (feature, layer) {
+            const props = feature.properties || {};
+            layer.bindPopup(`<strong>${props.name || 'GSI Feature'}</strong><br>Source: ${props.source || 'GSI'}<br>Hazard: ${props.hazard || 'Landslide'}`);
+          }
+        }).addTo(groundTruthLayerGroup);
+      } catch (err) {
+        console.error('Ground truth load error:', err);
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // Live Operational Radar Fetcher
+    // ------------------------------------------------------------------------
+    async function refreshLiveRadar() {
+      const ticker = document.getElementById('ticker-content');
+      ticker.innerHTML = '<div style="color: #38bdf8;">Polling Open-Meteo, GloFAS, GDACS, USGS, Sentinel-1 APIs...</div>';
+
+      try {
+        const resp = await fetch('/api/live?refresh=true');
+        if (!resp.ok) throw new Error('Live fetch failed');
+        liveData = await resp.json();
+
+        let html = `<div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">
+          Ingested <strong>${liveData.readings_count}</strong> readings across 5 sensors in <strong>${liveData.ingest_time_ms}ms</strong>
+        </div>`;
+
+        for (const adv of liveData.advisories) {
+          html += `
+            <div class="ticker-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                <span class="threat-pill threat-${adv.severity.toLowerCase()}">${adv.severity}</span>
+                <span class="mono" style="font-size: 10px; color: #94a3b8;">${adv.time}</span>
+              </div>
+              <div style="font-weight: 700; color: #f8fafc; font-size: 12px;">${adv.headline}</div>
+              <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">${adv.action}</div>
+              <div style="font-size: 10px; color: #38bdf8; margin-top: 4px;">Advance Lead Time: <strong>${adv.lead_time}</strong></div>
+            </div>
+          `;
+        }
+
+        ticker.innerHTML = html;
+      } catch (err) {
+        ticker.innerHTML = `<div style="color: #ef4444;">Error fetching live telemetry: ${err.message}</div>`;
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 86-Dimensional WorldState Vector Modal
+    // ------------------------------------------------------------------------
+    let fullVectorList = [];
+
+    async function openVectorModal() {
+      const cellId = selectedCellId || (replayData && replayData.focal);
+      if (!cellId) return;
+
+      document.getElementById('modal-cell-id').innerText = cellId;
+      document.getElementById('vector-modal').classList.add('open');
+
+      try {
+        const resp = await fetch(`/api/cell/${cellId}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        fullVectorList = data.world_state_vector.features;
+        renderVectorTable(fullVectorList);
+      } catch (err) {
+        console.error('Vector modal fetch error:', err);
+      }
+    }
+
+    function closeVectorModal() {
+      document.getElementById('vector-modal').classList.remove('open');
+    }
+
+    function renderVectorTable(features) {
+      const tbody = document.getElementById('vector-table-body');
+      let html = '';
+      features.forEach((f, idx) => {
+        let catBadge = '';
+        if (f.category === 'static') catBadge = '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">STATIC</span>';
+        else if (f.category === 'derived') catBadge = '<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">DERIVED</span>';
+        else if (f.category === 'satellite_foundation') catBadge = '<span style="background: rgba(192, 132, 252, 0.2); color: #d8b4fe; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">IMAGERY PCA</span>';
+        else catBadge = '<span style="background: rgba(56, 189, 248, 0.2); color: #7dd3fc; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">DYNAMIC</span>';
+
+        const valStr = (f.value !== null && f.value !== undefined) ? f.value.toFixed(3) : '<span style="color: #64748b;">NaN</span>';
+
+        html += `
+          <tr style="border-bottom: 1px dashed rgba(30, 41, 59, 0.6);">
+            <td class="mono" style="padding: 6px 8px; color: #64748b;">${idx + 1}</td>
+            <td class="mono" style="padding: 6px 8px; font-weight: 600; color: #f8fafc;">${f.feature_name}</td>
+            <td style="padding: 6px 8px;">${catBadge}</td>
+            <td class="mono" style="padding: 6px 8px; font-weight: 700; color: #38bdf8;">${valStr}</td>
+            <td style="padding: 6px 8px; color: #94a3b8; font-size: 11px;">${f.definition || '--'}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    function filterVectorTable(query) {
+      if (!query) {
+        renderVectorTable(fullVectorList);
+        return;
+      }
+      const q = query.toLowerCase();
+      const filtered = fullVectorList.filter(f => 
+        f.feature_name.toLowerCase().includes(q) || 
+        f.category.toLowerCase().includes(q) || 
+        (f.definition && f.definition.toLowerCase().includes(q))
+      );
+      renderVectorTable(filtered);
+    }
+
+    // Close modal on Escape key
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeVectorModal();
+      if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+        e.preventDefault();
+        togglePlay();
+      }
+    });
+  </script>
+</body>
+</html>
