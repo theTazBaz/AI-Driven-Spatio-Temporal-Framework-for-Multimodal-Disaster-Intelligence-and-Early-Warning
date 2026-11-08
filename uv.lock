@@ -340,6 +340,7 @@ dependencies = [
     { name = "kafka-python-ng" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pyshp" },
     { name = "rasterio", version = "1.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "rasterio", version = "1.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "redis" },
@@ -369,6 +370,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pyshp", specifier = ">=3.1.7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-socket", marker = "extra == 'dev'", specifier = ">=0.7" },
     { name = "rasterio", specifier = ">=1.4.4" },
@@ -1062,6 +1064,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e4/11/b213bebff182584360cb8d17c72c1677fec5c5c228de439e63bcf8ab1c8f/pyparsing-3.3.3.tar.gz", hash = "sha256:928ae7e20211f3b6f3915a72f06a0cfd29ab9d24279dd6346b6b1a7146397d36", size = 1050487, upload-time = "2026-09-20T20:59:05.609Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/38/bb/d215ee7c73b61497b28a5503f9f53523f294fcc936762b7caf90e0c1c2b5/pyparsing-3.3.3-py3-none-any.whl", hash = "sha256:ece8c00a69cf01b45d0b1dedabb469c90d8caf996d4fda40f147627a122849a4", size = 126420, upload-time = "2026-09-20T20:59:04.025Z" },
+]
+
+[[package]]
+name = "pyshp"
+version = "3.1.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/1f/deb8f00dff4c92979e72db8f43e2d124653515385893aff7e3cf2e812a80/pyshp-3.1.7.tar.gz", hash = "sha256:bb7d91dedcf1f111c69957c0d7f76413ab21764bf719b31c2e79291da44f4469", size = 2270192, upload-time = "2026-11-07T10:24:38.59Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/94/19d26d3b9d496efcd532064eaf723d9bde6dbe7e045bc21bbb83bfb7f407/pyshp-3.1.7-py3-none-any.whl", hash = "sha256:13d28b2d576f124090bd09de047c435811c8a8e4c00b1cd3fe571f1331a352f7", size = 73875, upload-time = "2026-11-07T10:24:37.325Z" },
 ]
 
 [[package]]

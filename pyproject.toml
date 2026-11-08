@@ -16,6 +16,7 @@ dependencies = [
     "httpx>=0.28.1",
     "kafka-python-ng>=2.2.3",
     "numpy>=1.26.0",
+    "pyshp>=3.1.7",
     "rasterio>=1.4.4",
     "redis>=5.0",
 ]
@@ -88,4 +89,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["kafka.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["shapefile.*"]
 ignore_missing_imports = true

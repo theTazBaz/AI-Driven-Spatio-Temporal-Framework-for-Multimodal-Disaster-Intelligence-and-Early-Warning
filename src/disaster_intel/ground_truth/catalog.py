@@ -68,7 +68,7 @@ class GroundTruthCatalog:
         polygons_shp: Path | str | None = None,
     ) -> DisasterEvent:
         """Load 2018 Kodagu landslide ground-truth from GSI shapefiles."""
-        import shapefile  # type: ignore[import-untyped]
+        import shapefile
 
         kodagu_dir = self.base_dir / "kodagu_2018"
         pts_file = Path(points_shp) if points_shp else kodagu_dir / "Landslide_Points.shp"
