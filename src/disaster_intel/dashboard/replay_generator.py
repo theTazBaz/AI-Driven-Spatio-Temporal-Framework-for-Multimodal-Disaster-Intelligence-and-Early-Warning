@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import math
-import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -28,12 +27,9 @@ from disaster_intel.grid import CoastalGrid
 from disaster_intel.ground_truth.catalog import GroundTruthCatalog
 from disaster_intel.models import Observation, RawReading
 from disaster_intel.state import FeatureSpec, StateAssembler, StaticLayers
-from disaster_intel.storage import HotStore
+from disaster_intel.storage import FakeRedis, HotStore
 
-# Use FakeRedis for reproducible deterministic processing
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "tests"))
-from fake_redis import FakeRedis  # noqa: E402
 
 REPLAY_DIR = PROJECT_ROOT / "data" / "historical" / "replays"
 

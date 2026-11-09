@@ -59,7 +59,7 @@ BENCHMARK_WINDOWS: dict[str, HistoricalWindow] = {
         end=datetime(2024, 7, 18, 23, 0, tzinfo=UTC),
         center_lat=14.61,
         center_lon=74.45,
-        focal_cells=("8760b526dffffff",),
+        focal_cells=("8760ad305ffffff",),
     ),
     "uttara_kannada_floods_2021": HistoricalWindow(
         name="uttara_kannada_floods_2021",
@@ -68,7 +68,7 @@ BENCHMARK_WINDOWS: dict[str, HistoricalWindow] = {
         end=datetime(2021, 7, 25, 23, 0, tzinfo=UTC),
         center_lat=14.81,
         center_lon=74.13,
-        focal_cells=("8760b526dffffff",),
+        focal_cells=("8760ad2ccffffff",),
     ),
     "kodagu_floods_2018": HistoricalWindow(
         name="kodagu_floods_2018",
@@ -77,7 +77,7 @@ BENCHMARK_WINDOWS: dict[str, HistoricalWindow] = {
         end=datetime(2018, 8, 18, 23, 0, tzinfo=UTC),
         center_lat=12.42,
         center_lon=75.74,
-        focal_cells=("872a1072bffffff",),
+        focal_cells=("876015298ffffff",),
     ),
     "quiet_period_baseline": HistoricalWindow(
         name="quiet_period_baseline",
@@ -86,7 +86,7 @@ BENCHMARK_WINDOWS: dict[str, HistoricalWindow] = {
         end=datetime(2024, 1, 15, 23, 0, tzinfo=UTC),
         center_lat=14.61,
         center_lon=74.45,
-        focal_cells=("8760b526dffffff", "872a1072bffffff"),
+        focal_cells=("8760ad305ffffff", "876015298ffffff"),
     ),
 }
 
@@ -130,24 +130,65 @@ def generate_historical_spell(
         ts = window.start + h * HOUR
         if is_quiet:
             rain = 0.0
+            soil_surf = 0.14 + 0.01 * math.sin(h / 12.0 * math.pi)
             soil_moist = 0.18 + 0.02 * math.sin(h / 12.0 * math.pi)
             discharge = 15.0 + 2.0 * math.cos(h / 24.0 * math.pi)
             temp = 28.0 + 3.0 * math.sin((h - 6) / 24.0 * 2 * math.pi)
+            seismic = 0.0
+            sar_water = 0.01
+            sar_vh_db = -14.2
+            cloud_top_tb = 288.0 + 4.0 * math.sin((h - 6) / 24.0 * 2 * math.pi)
+            cooling_rate = 0.0
         else:
             # Monsoonal bell-curve surge + diurnally modulated convective rain
             dist = (h - storm_center) / storm_sigma
             surge = math.exp(-0.5 * dist * dist)
             diurnal = max(0.0, math.sin(h / 24.0 * 2 * math.pi))
             rain = 0.5 + 24.0 * surge + 3.5 * diurnal
+            soil_surf = min(0.55, 0.22 + 0.24 * (h / total_hours) + 0.12 * surge)
             soil_moist = min(0.52, 0.28 + 0.22 * (h / total_hours) + 0.08 * surge)
             discharge = 35.0 + 320.0 * surge
             temp = 24.0 - 4.0 * surge + 2.0 * math.sin((h - 6) / 24.0 * 2 * math.pi)
+            seismic = 0.0
+
+            # Increment 14: All-weather Sentinel-1 C-SAR radar response
+            sar_water = round(min(0.78, 0.02 + 0.76 * surge), 3)
+            sar_vh_db = round(-14.0 - 9.5 * surge, 2)
+
+            # Increment 15: ISRO INSAT-3D/3DR convective nowcasting response
+            # Cloud tops cool rapidly 2 hours BEFORE surface rain reaches its peak
+            updraft_dist = (h - (storm_center - 2.0)) / storm_sigma
+            updraft_surge = math.exp(-0.5 * updraft_dist * updraft_dist)
+            cloud_top_tb = round(285.0 - 89.5 * updraft_surge, 1)
+            cooling_rate = round(-16.2 * updraft_surge, 2)
 
         for cell in cells:
-            observations.append(_make_obs(cell, "precipitation", rain, ts))
-            observations.append(_make_obs(cell, "soil_moisture_rootzone", soil_moist, ts))
-            observations.append(_make_obs(cell, "discharge", discharge, ts))
-            observations.append(_make_obs(cell, "temperature", temp, ts))
+            observations.append(
+                _make_obs(cell, "precipitation", rain, ts, source="open-meteo")
+            )
+            observations.append(
+                _make_obs(cell, "soil_moisture_surface", soil_surf, ts, source="open-meteo")
+            )
+            observations.append(
+                _make_obs(cell, "soil_moisture_rootzone", soil_moist, ts, source="open-meteo")
+            )
+            observations.append(_make_obs(cell, "discharge", discharge, ts, source="glofas"))
+            observations.append(_make_obs(cell, "temperature", temp, ts, source="open-meteo"))
+            observations.append(_make_obs(cell, "seismic_magnitude", seismic, ts, source="usgs"))
+            observations.append(
+                _make_obs(cell, "sar_water_fraction", sar_water, ts, source="sentinel-1")
+            )
+            observations.append(
+                _make_obs(cell, "sar_vh_backscatter_db", sar_vh_db, ts, source="sentinel-1")
+            )
+            observations.append(
+                _make_obs(cell, "insat_cloud_top_tb", cloud_top_tb, ts, source="insat-3d")
+            )
+            observations.append(
+                _make_obs(
+                    cell, "insat_convective_cooling_rate", cooling_rate, ts, source="insat-3d"
+                )
+            )
 
     return observations
 

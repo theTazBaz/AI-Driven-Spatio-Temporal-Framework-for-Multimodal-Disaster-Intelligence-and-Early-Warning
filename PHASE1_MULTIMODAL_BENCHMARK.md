@@ -4,7 +4,7 @@
 **Academic Context:** 7th Semester Major Project Phase 1 Defense  
 **Department:** Department of Information Technology, National Institute of Technology Karnataka (NITK), Surathkal  
 **Project Guide:** Dr. Sowmya Kamath S.  
-**Generated At:** 2026-11-02 22:56:41 UTC  
+**Generated At:** 2026-11-09 15:46:45 UTC  
 **Status:** Certified & All Targets Met (370 Unit & Integration Tests Passing)
 
 ---
@@ -57,12 +57,12 @@ Benchmarks measured across the two certified historical spells (`shirur_landslid
 
 | Metric | NITK Target | Measured (Shirur) | Measured (Floods) | Status | Verification Protocol |
 |---|---|---|---|---|---|
-| **Ingestion Latency p50** | Reported baseline | **32.00 ms** | **31.00 ms** | `[INFO]` | Benchmarked through `InMemorySink` |
-| **Ingestion Latency p95** | Reported baseline | **47.00 ms** | **47.00 ms** | `[INFO]` | Percentile over historical record stream |
+| **Ingestion Latency p50** | Reported baseline | **31.00 ms** | **31.00 ms** | `[INFO]` | Benchmarked through `InMemorySink` |
+| **Ingestion Latency p95** | Reported baseline | **46.00 ms** | **47.00 ms** | `[INFO]` | Percentile over historical record stream |
 | **Ingestion Latency p99** | Reported baseline | **48.00 ms** | **48.00 ms** | `[INFO]` | Long-tail ingestion stability |
 | **Ingestion Completion Rate** | >= 99.0% | **100.00%** | **100.00%** | `[PASS]` | Zero dropped readings across batches |
 | **Source vs Parse Attribution** | Explicit attribution | **S: 0, P: 0** | **S: 0, P: 0** | `[PASS]` | Every anomaly attributed to root cause |
-| **Historical Replay Speedup** | >= 100x real-time | **3,784,452,670x** | **5,002,915,562x** | `[PASS]` | Accelerated backfill over disaster hours |
+| **Historical Replay Speedup** | >= 100x real-time | **1,459,625,244x** | **1,583,025,818x** | `[PASS]` | Accelerated backfill over disaster hours |
 
 ---
 
@@ -70,8 +70,8 @@ Benchmarks measured across the two certified historical spells (`shirur_landslid
 
 | Metric | NITK Target | Measured | Status | Architectural Guarantee |
 |---|---|---|---|---|
-| **Hot-Tier Read Latency (p95)** | < 5.0 ms | **0.109 ms** | `[PASS]` | Redis in-memory bucket ring index |
-| **Hot-Tier Write Latency (p95)** | < 5.0 ms | **0.025 ms** | `[PASS]` | Low-overhead observation list appending |
+| **Hot-Tier Read Latency (p95)** | < 5.0 ms | **0.144 ms** | `[PASS]` | Redis in-memory bucket ring index |
+| **Hot-Tier Write Latency (p95)** | < 5.0 ms | **0.049 ms** | `[PASS]` | Low-overhead observation list appending |
 | **Cold-Tier Correctness vs Arrival** | 100.0% identical | **100.0%** | `[PASS]` | Bit-exact ClickHouse Parquet/ZSTD storage |
 | **Rolling Window Correctness** | 100.0% match | **100.0%** | `[PASS]` | Verified against pure Python reference oracle |
 | **Deterministic Historical Rollback** | Bit-exact equality | **Agrees (True)** | `[PASS]` | State at past T equals live state computed at T |
