@@ -479,6 +479,10 @@
 
     <!-- Right Controls -->
     <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+      <button class="ctrl-btn" onclick="cycleBasemap()" id="btn-basemap" title="Switch Basemap (Dark Canvas / Satellite Recon / Street)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+        <span id="basemap-label">BASEMAP: DARK</span>
+      </button>
       <button class="ctrl-btn" onclick="toggleGroundTruth()" id="btn-gt-toggle" title="Toggle GSI Landslide Survey Overlay">
         <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#06b6d4;"></span>
         GSI SURVEY
@@ -720,17 +724,55 @@
       await loadReplayEvent(currentEventId);
     });
 
+    // Basemap configurations (100% Free, Zero API Key Required)
+    const BASEMAPS = {
+      dark: {
+        name: 'DARK',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        options: { maxNativeZoom: 16, maxZoom: 18, attribution: 'Esri &bull; NITK Disaster Intelligence Framework' }
+      },
+      satellite: {
+        name: 'SATELLITE',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        options: { maxNativeZoom: 18, maxZoom: 18, attribution: 'Esri World Imagery' }
+      },
+      osm: {
+        name: 'STREET',
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        options: { maxZoom: 18, attribution: '&copy; OpenStreetMap contributors' }
+      }
+    };
+    let currentBasemapKey = 'dark';
+    let activeTileLayer = null;
+
+    function setBasemap(key) {
+      if (!map) return;
+      if (activeTileLayer) {
+        map.removeLayer(activeTileLayer);
+      }
+      const cfg = BASEMAPS[key];
+      currentBasemapKey = key;
+      activeTileLayer = L.tileLayer(cfg.url, cfg.options).addTo(map);
+      activeTileLayer.bringToBack();
+      const labelEl = document.getElementById('basemap-label');
+      if (labelEl) labelEl.innerText = `BASEMAP: ${cfg.name}`;
+    }
+
+    function cycleBasemap() {
+      const keys = ['dark', 'satellite', 'osm'];
+      const nextIdx = (keys.indexOf(currentBasemapKey) + 1) % keys.length;
+      setBasemap(keys[nextIdx]);
+    }
+
     function initMap() {
-      // Initialize Leaflet map with CartoDB Dark Matter tiles
+      // Initialize Leaflet map
       map = L.map('map', {
         zoomControl: true,
         attributionControl: false,
       }).setView([14.98, 74.30], 10);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 18,
-        subdomains: 'abcd',
-      }).addTo(map);
+      // Load initial tactical dark canvas
+      setBasemap('dark');
 
       hexLayerGroup = L.layerGroup().addTo(map);
       groundTruthLayerGroup = L.layerGroup().addTo(map);
@@ -1245,3 +1287,4 @@
   </script>
 </body>
 </html>
+
