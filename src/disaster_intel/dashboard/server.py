@@ -601,8 +601,15 @@ def get_live_radar(refresh: bool = False) -> dict[str, Any]:
 
     ingest_time_ms = round((time.perf_counter() - t0) * 1000, 2)
 
-    # Ingest into temporary live HotStore
-    live_hot = HotStore(FakeRedis(), clock=clock, prefix="dashboard_live:")
+    # Ingest into live HotStore (connect to real Redis if live, fallback to in-memory)
+    try:
+        live_hot = HotStore.connect(
+            host="127.0.0.1", port=6379, clock=clock, prefix="dashboard_live:"
+        )
+        live_hot.client.ping()
+    except Exception:
+        live_hot = HotStore(FakeRedis(), clock=clock, prefix="dashboard_live:")
+
     live_hot.write(observations)
     assembler = StateAssembler(get_layers(), hot=live_hot, clock=clock)
 
