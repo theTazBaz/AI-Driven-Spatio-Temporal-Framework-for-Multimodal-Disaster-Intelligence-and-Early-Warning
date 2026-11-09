@@ -615,23 +615,34 @@ def get_live_radar(refresh: bool = False) -> dict[str, Any]:
         "8760a9825ffffff",
         "8760a9826ffffff",
     ]
+    layers = get_layers()
     for c in monitored_cells:
         if c in grid:
             m = assembler.get_state(c, tier="hot").as_mapping(v1_spec)
             lat_c, lon_c = grid.cell_to_latlng(c)
-            p24 = round(0.0 if math.isnan(m["precipitation__24h"]) else m["precipitation__24h"], 2)
-            sm = round(
-                0.0
-                if math.isnan(m["soil_moisture_rootzone__24h"])
-                else m["soil_moisture_rootzone__24h"],
-                3,
+            feat_c = layers.get(c)
+
+            p24_raw = m.get("precipitation__24h", 0.0)
+            p24 = round(0.0 if math.isnan(p24_raw) else float(p24_raw), 2)
+
+            sm_raw = m.get("soil_moisture_rootzone__24h", 0.0)
+            sm = round(0.0 if math.isnan(sm_raw) else float(sm_raw), 3)
+
+            cs_raw = m.get("compound_saturation", 0.0)
+            cs = round(0.0 if math.isnan(cs_raw) else float(cs_raw), 2)
+
+            slope_c = (
+                float(feat_c.slope_deg)
+                if feat_c is not None and not math.isnan(feat_c.slope_deg)
+                else 0.0
             )
-            cs = round(
-                0.0 if math.isnan(m["compound_saturation"]) else m["compound_saturation"], 2
+            gsi_c = (
+                float(feat_c.gsi_susceptibility_index)
+                if feat_c is not None and not math.isnan(feat_c.gsi_susceptibility_index)
+                else 0.0
             )
-            shear = round(
-                0.0 if math.isnan(m.get("slope_shear_risk", 0.0)) else m["slope_shear_risk"], 2
-            )
+            shear = round(slope_c * gsi_c, 2)
+
             top_cells.append(
                 {
                     "cell_id": c,

@@ -8,6 +8,7 @@ from starlette.requests import Request
 from disaster_intel.dashboard.server import (
     get_cell_timeseries,
     get_ground_truth,
+    get_live_radar,
     get_replay,
     get_status,
     inspect_cell,
@@ -143,3 +144,34 @@ def test_api_timeseries() -> None:
     assert len(data) > 0
     assert "p1" in data[0]
     assert "cs" in data[0]
+
+
+@pytest.mark.unit
+def test_api_live(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test executing the live multimodal radar cycle."""
+    from unittest.mock import MagicMock
+
+    # Mock external network adapters to prevent live socket calls in unit test
+    prefix = "disaster_intel.dashboard.server"
+    monkeypatch.setattr(f"{prefix}.OpenMeteoAdapter.fetch_grid_nodes", MagicMock(return_value=[]))
+    monkeypatch.setattr(f"{prefix}.GloFASAdapter.fetch_discharge", MagicMock(return_value=[]))
+    monkeypatch.setattr(f"{prefix}.GDACSAdapter.fetch_live_alerts", MagicMock(return_value=[]))
+    monkeypatch.setattr(f"{prefix}.USGSAdapter.fetch_events", MagicMock(return_value=[]))
+    monkeypatch.setattr(
+        f"{prefix}.Sentinel1Adapter.query_cdse_catalog", MagicMock(return_value=[])
+    )
+
+    data = get_live_radar(refresh=True)
+    assert "timestamp" in data
+    assert "top_cells" in data
+    assert len(data["top_cells"]) > 0
+    assert "advisories" in data
+    assert len(data["advisories"]) > 0
+    assert "sensor_health" in data
+    for cell in data["top_cells"]:
+        assert "cell_id" in cell
+        assert "slope_shear_risk" in cell
+        assert "compound_saturation" in cell
+        assert "threat_level" in cell
+
+
